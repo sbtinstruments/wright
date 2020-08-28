@@ -25,19 +25,19 @@ _LOGGER = logging.getLogger(__name__)
 def reset_hw(
     swu: Path = typer.Argument(..., exists=True, readable=True),
     *,
-    hardware: Hardware = typer.Option(...),
-    branding: Branding = typer.Option(...),
-    hostname: str = typer.Option(...),
-    fsbl_elf: Path = typer.Option(..., exists=True, readable=True),
+    hardware: Hardware = typer.Option(..., envvar="STORK_HARDWARE"),
+    branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
+    hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
+    fsbl_elf: Path = typer.Option(..., exists=True, readable=True, envvar="STORK_FSBL_ELF"),
     tty: Path = typer.Option(
-        Path("/dev/ttyUSB0"), exists=True, readable=True, writable=True
+        Path("/dev/ttyUSB0"), exists=True, readable=True, writable=True, envvar="STORK_TTY"
     ),
-    tftp_host: Optional[str] = typer.Option(None),
-    tftp_port: Optional[int] = typer.Option(6969),
-    skip_program_flash: bool = typer.Option(False),
-    skip_system_image: bool = typer.Option(False),
-    skip_config_image: bool = typer.Option(False),
-    restore_default_uboot_env: bool = typer.Option(False),
+    tftp_host: Optional[str] = typer.Option(None, envvar="STORK_TFTP_HOST"),
+    tftp_port: Optional[int] = typer.Option(6969, envvar="STORK_TFTP_PORT"),
+    skip_program_flash: bool = typer.Option(False, envvar="STORK_SKIP_PROGRAM_FLASH"),
+    skip_system_image: bool = typer.Option(False, envvar="STORK_SKIP_SYSTEM_IMAGE"),
+    skip_config_image: bool = typer.Option(False, envvar="STORK_SKIP_CONFIG_IMAGE"),
+    restore_default_uboot_env: bool = typer.Option(False, envvar="STORK_RESTORE_DEFAULT_UBOOT_ENV"),
 ):
     # Extra validation
     raise_if_bad_hostname(hostname, hardware)
