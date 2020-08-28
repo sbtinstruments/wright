@@ -7,16 +7,15 @@ from typing import List, Optional
 
 import typer
 
-from ..hardware import Hardware
 from ..branding import Branding
+from ..config import create_config_image
+from ..hardware import Hardware
 from ..reset import _reset_hw
 from ..util import extract_swu, get_local_ip
 from ._validation import raise_if_bad_hostname
-from ..config import create_config_image
 
 app = typer.Typer()
 
-# TEMP_DIR = Path("/tmp/stork")
 TEMP_DIR = Path(f"/tmp/stork-{os.getpid()}")
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,9 +49,9 @@ def reset_hw(
     shutil.copy(swu, TEMP_DIR)
     # Copy over the first-stage boot loader (FSBL).
     #
-    # Note that this is NOT the FSBL that will end up on the board.
+    # Note that this is NOT the FSBL that will end up on the hardware.
     # It is merely a temporary boot loader used to copy the actual FSBL
-    # to the board over JTAG.
+    # to the hardware over JTAG.
     shutil.copy(fsbl_elf, TEMP_DIR / "fsbl.elf")
     os.chdir(TEMP_DIR)
     # Extract SWU contents. We will need it for later.

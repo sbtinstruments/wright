@@ -23,7 +23,7 @@ def program_flash(target: str) -> None:
     # Second, write `bin_path` to FLASH memory.
     #
     # It is very slow to transfer data from the host computer to the
-    # target board. Therefore, we want to transfer as little data as
+    # target hardware. Therefore, we want to transfer as little data as
     # possible.
     #
     # Fortunately, `bin_path` consists mostly of null-bytes that we

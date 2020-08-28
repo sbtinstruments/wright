@@ -1,27 +1,56 @@
 import asyncio
 import itertools
 import logging
+from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
 
 import serial
 
+from .hardware import Hardware
+
 _LOGGER = logging.getLogger(__name__)
 
 
-class Board:
-    def __init__(self, tty: Path, prompt: str):
-        baud_rate = 115200
-        self.serial = serial.Serial(str(tty), baud_rate)
+class Mode(Enum):
+    UBOOT = auto()
+    LINUX = auto()
+
+
+class Console:
+    """Serial console used to send commands to the hardware.
+
+    Works both in U-boot and Linux mode.
+    """
+
+    def __init__(self, tty: Path, *, hardware: Hardware, hostname: str, baud_rate: Optional[int] = None, mode: Optional[Mode] = None):
+        # Argument defaults
+        if baud_rate is None:
+            baud_rate = 115200
+        if mode is None:
+            mode = Mode.UBOOT
+        # Serial connection (opened in `__aenter__`)
+        self._serial = serial.Serial(str(tty), baud_rate)
+        # Internals
+        self._mode = mode
         self._read_task = None
-        self.prompt = prompt
+        self._prompts = _prompts(hardware, hostname)
         self._responses = asyncio.Queue()
-        self._lock = asyncio.Lock()
+        self._serial_lock = asyncio.Lock()
+
+    async def set_mode(self, mode: Mode) -> None:
+        """Set the console mode.
+
+        The mode determines the prompt that we search for in the console input.
+        """
+        # We grab the serial lock since we use `_mode` while parsing serial input
+        async with self._serial_lock:
+            self._mode = mode
 
     async def force_prompt(self):
         """Force the prompt to appear.
 
-        This is done by continuously spamming the board via the serial
+        This is done by continuously spamming the console via the serial
         connection. During boot, any message will halt the boot sequence
         and show the prompt.
 
@@ -52,11 +81,11 @@ class Board:
     async def wait_for_prompt(self) -> str:
         """Wait for the prompt to appear.
 
-        Return the last response seen in the serial output. That is, the
-        output since the last `prompt` occurred.
+        Return the last response seen in the serial input. That is, the
+        input since the last prompt occurred.
         """
         # Wait for a response. Whenever the prompt appears in the serial
-        # output, a response will be emitted.
+        # input, a response will be emitted.
         result = await self._responses.get()
         # Sometimes, there may be multiple responses. E.g., when we spam
         # the serial line in an attempt to interrupt a boot process.
@@ -85,9 +114,9 @@ class Board:
         return resp
 
     async def _cmd(self, cmd, *, wait_for_prompt=True) -> Optional[str]:
-        async with self._lock:
+        async with self._serial_lock:
             # Add line end so that the command is executed
-            self.serial.write((cmd + "\n").encode())
+            self._serial.write((cmd + "\n").encode())
         # Early out
         if not wait_for_prompt:
             return
@@ -104,8 +133,8 @@ class Board:
         """Send 'reset' command but do not wait for acknowledgement"""
         await self.cmd("reset", wait_for_prompt=False)
 
-    async def _parse_serial_output(self):
-        """Put data in `_responses` whenever `prompt` is found in the input.
+    async def _parse_serial_input(self):
+        """Put data in `_responses` whenever the prompt is found in the input.
 
         The implementation is not optimized at all. It will hog the CPU while it
         continuously polls for data. It is certainly not meant for applications
@@ -113,22 +142,23 @@ class Board:
         """
         buffer = ""
         while True:
-            async with self._lock:
+            async with self._serial_lock:
                 # Ideally, there should be something like async_read so that
                 # we wouldn't have to continuously poll for data.
                 try:
-                    raw_serial_data = self.serial.read(self.serial.in_waiting).decode()
+                    raw_serial_data = self._serial.read(self._serial.in_waiting).decode()
                 except UnicodeDecodeError:
                     _LOGGER.warning(
-                        "Could not decode data from board. Skipping said data."
+                        "Could not decode data from console. Skipping said data."
                     )
                 print(raw_serial_data, end="", flush=True)
                 # The raw serial data may contain partial responses. Therefore, we buffer
-                # it until we can recognize `prompt` in it.
+                # it until we can recognize the prompt in it.
                 buffer += raw_serial_data
-                if self.prompt in buffer:
+                prompt = self._prompts[self._mode]
+                if prompt in buffer:
                     # Split the buffer into individual responses (separated by the prompt).
-                    responses = buffer.split(self.prompt)
+                    responses = buffer.split(prompt)
                     # Note that `"x".split("x")` returns ["", ""]. There, there should
                     # always be at least two responses in the buffer.
                     assert len(responses) >= 2
@@ -142,10 +172,22 @@ class Board:
             await asyncio.sleep(0.01)
 
     async def __aenter__(self):
-        self.serial.__enter__()
-        self._read_task = asyncio.create_task(self._parse_serial_output())
+        self._serial.__enter__()
+        self._read_task = asyncio.create_task(self._parse_serial_input())
         return self
 
     async def __aexit__(self, *args):
         self._read_task.cancel()
-        self.serial.__exit__()
+        try:
+            await self._read_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._serial.__exit__()
+
+
+def _prompts(hardware: Hardware, hostname: str):
+    return {
+        Mode.UBOOT: f"\r\n{hardware.value}> ",
+        Mode.LINUX: f"\r\n\x1b[1;34mroot@{hostname}\x1b[m$ ",
+    }
