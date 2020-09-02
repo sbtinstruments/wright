@@ -102,7 +102,7 @@ def create_ssh_key_pair(destination_dir: Path) -> None:
         f.write(
             private_key.private_bytes(
                 crypto_serialization.Encoding.PEM,
-                crypto_serialization.PrivateFormat.PKCS8,
+                crypto_serialization.PrivateFormat.OpenSSH,
                 crypto_serialization.NoEncryption(),
             )
         )
