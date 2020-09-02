@@ -8,7 +8,7 @@ from typing import List, Optional
 import typer
 
 from ..branding import Branding
-from ..config import create_config_image
+from ..config import create_config_image as cfi
 from ..hardware import Hardware
 from ..reset import _reset_hw
 from ..util import extract_swu, get_local_ip
@@ -18,6 +18,16 @@ app = typer.Typer()
 
 TEMP_DIR = Path(f"/tmp/stork-{os.getpid()}")
 _LOGGER = logging.getLogger(__name__)
+
+
+
+@app.command()
+def create_config_image(
+    hardware: Hardware = typer.Option(..., envvar="STORK_HARDWARE"),
+    branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
+    hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
+):
+    cfi(hardware=hardware, branding=branding, hostname=hostname)
 
 
 @app.command()
