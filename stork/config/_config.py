@@ -153,4 +153,4 @@ _PRETTY_NAMES = {
 
 def _hw_release(hardware: Hardware, branding: Branding, manufacturer: str) -> str:
     pretty_name = _PRETTY_NAMES[hardware]
-    return f'PRETTY_NAMY="{pretty_name}"\nMANUFACTURER="{manufacturer}"\nBRANDING={branding.value}\n'
+    return f'PRETTY_NAME="{pretty_name}"\nMANUFACTURER="{manufacturer}"\nBRANDING={branding.value}\n'
