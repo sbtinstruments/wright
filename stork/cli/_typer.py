@@ -38,8 +38,14 @@ def reset_hw(
     branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
     hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
     fsbl_elf: Path = typer.Option(..., exists=True, readable=True, envvar="STORK_FSBL_ELF"),
-    tty: Path = typer.Option(
-        Path("/dev/ttyUSB0"), exists=True, readable=True, writable=True, envvar="STORK_TTY"
+    # Note that "tty" is a string and not a `Path`. This is due to a bug
+    # in "click" that raises an
+    #
+    #    AttributeError: 'PosixPath' object has no attribute 'encode'
+    #
+    # when the default is of type `Path`.
+    tty: str = typer.Option(
+        "/dev/ttyUSB0", exists=True, readable=True, writable=True, envvar="STORK_TTY"
     ),
     tftp_host: Optional[str] = typer.Option(None, envvar="STORK_TFTP_HOST"),
     tftp_port: Optional[int] = typer.Option(6969, envvar="STORK_TFTP_PORT"),
@@ -76,7 +82,7 @@ def reset_hw(
                 swu,
                 hardware=hardware,
                 hostname=hostname,
-                tty=tty,
+                tty=Path(tty),
                 tftp_host=tftp_host,
                 tftp_port=tftp_port,
                 skip_program_flash=skip_program_flash,
