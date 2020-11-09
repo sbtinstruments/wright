@@ -1,3 +1,10 @@
-*.pyc
+# E.g., first-stage boot loader
+*.elf
+# SWUpdate files
+*.swu
+# Config image
 config/
 config.img
+
+# Python runtime cache
+*.pyc
