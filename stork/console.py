@@ -54,7 +54,7 @@ class Console:
         connection. During boot, any message will halt the boot sequence
         and show the prompt.
 
-        We use this during boot to interript the boot process and enter,
+        We use this during boot to interrupt the boot process and enter,
         e.g., the U-boot console.
         """
         # Spam the serial line with simple "echo" commands.
