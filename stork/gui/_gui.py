@@ -107,6 +107,7 @@ def _layout():
     ]
 
 
+
 class WindowEventLoop(AsyncContextManager):
     def __init__(self) -> None:
         self._task: Optional[asyncio.Task] = None
@@ -122,18 +123,36 @@ class WindowEventLoop(AsyncContextManager):
         self._status: sg.Text = self._window["status"]
 
     async def run_forever(self):
+        prev_params = None
         # Event Loop to process "events" and get the "values" of the inputs
         while True:
+            # This is a very crude and CPU-intensive way to integrate
+            # asyncio with PySimpleGUI.
             await asyncio.sleep(0.01)
             event, values = self._window.read(0)
             # Persist values
             if values is not None:
                 with _CONFIG.open("w") as f:
                     json.dump(values, f)
+            
             if event == sg.WIN_CLOSED:
                 break
-            elif event == "Start":
-                self._start_task_ui(values)
+
+            try:
+                params = _get_parameters(values)
+            except Exception as exc:
+                self._messages.update(value=str(exc), background_color="lightgrey")
+                self._start_button.update(disabled=True)
+                params = None
+            params_changed = prev_params != params
+            prev_params = params
+            if params is not None and params_changed:
+                self._messages.update(value='Press "Start" to program the board', background_color="white")
+                self._start_button.update(disabled=False)
+
+            
+            if event == "Start":
+                self._start_task_ui(params)
             elif event == "Continue":
                 self._continue_button.update(disabled=True)
                 self._continue_event.set()
@@ -141,7 +160,7 @@ class WindowEventLoop(AsyncContextManager):
             elif event == "Stop":
                 await self._cancel_task_ui()
 
-    def _start_task_ui(self, values) -> None:
+    def _start_task_ui(self, params) -> None:
         # We disable the start button while the task runs. Therefore,
         # it shouldn't be possible to start two tasks in parallel.
         if self._task is not None:
@@ -149,22 +168,14 @@ class WindowEventLoop(AsyncContextManager):
         self._start_button.update(disabled=True)
         self._disable_parameters(True)
 
-        swu = Path(values["swu_file"])
-        hardware = next(hw for hw in Hardware if hw.name == values["hardware"])
-        branding = next(br for br in Branding if br.name == values["branding"])
-        hostname = values["hostname"]
-        fsbl_elf = Path(values["fsbl_elf"])
         output_cb = partial(self._output.print, end="")
 
         async def _reset_hw():
 
             try:
                 steps = commands.reset_hw(
-                    swu,
-                    hardware=hardware,
-                    branding=branding,
-                    hostname=hostname,
-                    fsbl_elf=fsbl_elf,
+                    *params[0],
+                    **params[1],
                     output_cb=output_cb,
                 )
 
@@ -189,10 +200,11 @@ class WindowEventLoop(AsyncContextManager):
                     else:
                         raise RuntimeError("Unknown step")
 
-            except Exception as exc:
+            except Exception as exc:  # [1]
                 tb = traceback.format_exc()
                 self._messages.update(value=tb, background_color="red")
                 _LOGGER.error("Error:", exc_info=exc)
+                raise
             else:
                 self._start_button.update(disabled=False)
                 self._disable_parameters(False)
@@ -218,7 +230,10 @@ class WindowEventLoop(AsyncContextManager):
         if self._task is None:
             return
         self._task.cancel()
-        with suppress(asyncio.CancelledError):
+        # We also suppress the general `Exception` because we don't
+        # care if the task raised. We already displayed/logged any error
+        # at [1].
+        with suppress(Exception, asyncio.CancelledError):
             await self._task
 
     def _disable_parameters(self, flag: bool) -> None:
@@ -245,6 +260,24 @@ class WindowEventLoop(AsyncContextManager):
     ) -> None:
         await self._cancel_task()
         self._window.close()
+
+
+def _get_parameters(values) -> Optional[tuple]:
+    swu = Path(values["swu_file"])
+    hardware = next(hw for hw in Hardware if hw.name == values["hardware"])
+    branding = next(br for br in Branding if br.name == values["branding"])
+    hostname = values["hostname"]
+    fsbl_elf = Path(values["fsbl_elf"])
+    commands.raise_if_bad_hostname(hostname, hardware)
+    args = (swu,)
+    kwargs = {
+        "hardware": hardware,
+        "branding": branding,
+        "hostname": hostname,
+        "fsbl_elf": fsbl_elf,
+    }
+    return (args, kwargs)
+
 
 
 async def gui_async():

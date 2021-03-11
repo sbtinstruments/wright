@@ -83,6 +83,9 @@ def _prepare_files(
     hostname: str,
     fsbl_elf: Path,
 ) -> None:
+    # Remove the temporary dir to avoid lingering artifacts from
+    # previous runs.
+    shutil.rmtree(TEMP_DIR, ignore_errors=True)
     # Copy over files to the temporary dir and switch to said dir
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     shutil.copy(swu, TEMP_DIR)
