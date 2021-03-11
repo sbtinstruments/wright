@@ -117,29 +117,20 @@ def create_ssh_key_pair(destination_dir: Path) -> None:
 
 # The image formats supported by the secondary boot loader (U-boot
 # in our case).
-_SUPPORTED_IMAGE_FORMATS = {
-    Hardware.BACTOBOX: [".bmp"],
-    Hardware.ZEUS: [".rgb565"],
-}
-
-_SPLASH_SCREENS = {
-    Branding.SBT: "sbt.bmp",
-    Branding.ROMER: "romer.rgb565",
-}
+_IMAGE_FORMATS = [".bmp"]
 
 
 def create_splash_screen(root: Path, branding: Branding, hardware: Hardware) -> None:
     """Create a splash screen image according to the given branding."""
     graphics = root / "individual/etc/graphics"
-    image_formats = _SUPPORTED_IMAGE_FORMATS[hardware]
     # Choose a splash screen in the first available image format
-    chosen_format = image_formats[0]
+    chosen_format = _IMAGE_FORMATS[0]
     splash_screen = f"{branding.value}{chosen_format}"
     print(f"splash_screen: {splash_screen}")
     image = resources.read_binary(assets, splash_screen)
     create_file(graphics / f"splash{chosen_format}", image)
     # Symbolic links from the root to help the second-stage boot loader
-    for image_format in image_formats:
+    for image_format in _IMAGE_FORMATS:
         splash_from = root / f"splash{image_format}"
         splash_to = f"individual/etc/graphics/splash{image_format}"
         splash_from.symlink_to(splash_to)
