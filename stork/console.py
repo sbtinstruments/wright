@@ -1,9 +1,10 @@
 import asyncio
+from functools import partial
 import itertools
 import logging
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import serial
 
@@ -23,16 +24,28 @@ class Console:
     Works both in U-boot and Linux mode.
     """
 
-    def __init__(self, tty: Path, *, hardware: Hardware, hostname: str, baud_rate: Optional[int] = None, mode: Optional[Mode] = None):
+    def __init__(
+        self,
+        tty: Path,
+        *,
+        hardware: Hardware,
+        hostname: str,
+        baud_rate: Optional[int] = None,
+        mode: Optional[Mode] = None,
+        output_cb: Optional[Callable[[str], None]] = None,
+    ):
         # Argument defaults
         if baud_rate is None:
             baud_rate = 115200
         if mode is None:
             mode = Mode.UBOOT
+        if output_cb is None:
+            output_cb = partial(print, end="", flush=True)
         # Serial connection (opened in `__aenter__`)
         self._serial = serial.Serial(str(tty), baud_rate)
         # Internals
         self._mode = mode
+        self._output_cb = output_cb
         self._read_task = None
         self._prompts = _prompts(hardware, hostname)
         self._responses = asyncio.Queue()
@@ -146,12 +159,15 @@ class Console:
                 # Ideally, there should be something like async_read so that
                 # we wouldn't have to continuously poll for data.
                 try:
-                    raw_serial_data = self._serial.read(self._serial.in_waiting).decode()
+                    raw_serial_data = self._serial.read(
+                        self._serial.in_waiting
+                    ).decode()
                 except UnicodeDecodeError:
                     _LOGGER.warning(
                         "Could not decode data from console. Skipping said data."
                     )
-                print(raw_serial_data, end="", flush=True)
+                if raw_serial_data:
+                    self._output_cb(raw_serial_data)
                 # The raw serial data may contain partial responses. Therefore, we buffer
                 # it until we can recognize the prompt in it.
                 buffer += raw_serial_data

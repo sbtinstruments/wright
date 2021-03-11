@@ -1,4 +1,4 @@
-from ..hardware import Hardware
+from ...hardware import Hardware
 
 
 def raise_if_bad_hostname(hostname: str, hardware: Hardware):

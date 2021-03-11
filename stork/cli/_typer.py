@@ -1,24 +1,20 @@
 import asyncio
+from functools import partial
 import logging
-import os
-import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import typer
 
+from .. import commands
 from ..branding import Branding
 from ..config import create_config_image as cfi
 from ..hardware import Hardware
-from ..reset import _reset_hw
-from ..util import extract_swu, get_local_ip
-from ._validation import raise_if_bad_hostname
 
 app = typer.Typer()
 
-TEMP_DIR = Path(f"/tmp/stork-{os.getpid()}")
-_LOGGER = logging.getLogger(__name__)
 
+_LOGGER = logging.getLogger(__name__)
 
 
 @app.command()
@@ -37,7 +33,9 @@ def reset_hw(
     hardware: Hardware = typer.Option(..., envvar="STORK_HARDWARE"),
     branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
     hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
-    fsbl_elf: Path = typer.Option(..., exists=True, readable=True, envvar="STORK_FSBL_ELF"),
+    fsbl_elf: Path = typer.Option(
+        ..., exists=True, readable=True, envvar="STORK_FSBL_ELF"
+    ),
     # Note that "tty" is a string and not a `Path`. This is due to a bug
     # in "click" that raises an
     #
@@ -52,36 +50,19 @@ def reset_hw(
     skip_program_flash: bool = typer.Option(False, envvar="STORK_SKIP_PROGRAM_FLASH"),
     skip_system_image: bool = typer.Option(False, envvar="STORK_SKIP_SYSTEM_IMAGE"),
     skip_config_image: bool = typer.Option(False, envvar="STORK_SKIP_CONFIG_IMAGE"),
-    restore_default_uboot_env: bool = typer.Option(False, envvar="STORK_RESTORE_DEFAULT_UBOOT_ENV"),
+    restore_default_uboot_env: bool = typer.Option(
+        False, envvar="STORK_RESTORE_DEFAULT_UBOOT_ENV"
+    ),
 ):
-    # Extra validation
-    raise_if_bad_hostname(hostname, hardware)
-    # Default arguments
-    if tftp_host is None:
-        tftp_host = get_local_ip()
-
-    # Copy over files to the temporary dir and switch to said dir
-    TEMP_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy(swu, TEMP_DIR)
-    # Copy over the first-stage boot loader (FSBL).
-    #
-    # Note that this is NOT the FSBL that will end up on the hardware.
-    # It is merely a temporary boot loader used to copy the actual FSBL
-    # to the hardware over JTAG.
-    shutil.copy(fsbl_elf, TEMP_DIR / "fsbl.elf")
-    os.chdir(TEMP_DIR)
-    # Extract SWU contents. We will need it for later.
-    extract_swu(Path(swu.name))
-    # Create config image
-    create_config_image(hardware=hardware, branding=branding, hostname=hostname)
-
-    # Run command
-    try:
-        asyncio.run(
-            _reset_hw(
+    async def _reset_hw():
+        try:
+            steps = commands.reset_hw(
                 swu,
                 hardware=hardware,
+                branding=branding,
                 hostname=hostname,
+                fsbl_elf=fsbl_elf,
+                output_cb=partial(print, end=""),
                 tty=Path(tty),
                 tftp_host=tftp_host,
                 tftp_port=tftp_port,
@@ -90,15 +71,34 @@ def reset_hw(
                 skip_config_image=skip_config_image,
                 restore_default_uboot_env=restore_default_uboot_env,
             )
-        )
-    except KeyboardInterrupt:
-        _LOGGER.info("User interrupted the program")
-    finally:
-        shutil.rmtree(TEMP_DIR)
+            async for step in steps:
+                if isinstance(step, commands.StatusUpdate):
+                    print_info(step)
+                elif isinstance(step, commands.Instruction):
+                    print_info(step.text)
+                elif isinstance(step, commands.RequestConfirmation):
+                    print_info(step.text)
+                    press_enter_to_continue()
+                else:
+                    raise RuntimeError("Unknown output")
+
+        except KeyboardInterrupt:
+            _LOGGER.info("User interrupted the program")
+
+    asyncio.run(_reset_hw())
 
 
-# Add a second command so that typer forces users to explicitly
-# write out the commands.
+def print_info(text):
+    print("\033[7m>>>   " + text + "\033[0m")
+
+
+def press_enter_to_continue():
+    print_info("Press <Enter> to continue")
+    input()
+
+
 @app.command()
-def _ignore():
-    pass
+def gui():
+    from ..gui import gui
+
+    gui()
