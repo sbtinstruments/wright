@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ...console import Console, Mode
-from ...flash import program_flash
+from ...flash2 import program_flash
 from ...hardware import Hardware
 from ...tftp import AsyncTFTPServer
 from .._command import StepByStepCommand
@@ -49,7 +49,7 @@ async def reset_hw_steps(
             )
             start = datetime.now()
             yield "Programming FLASH"
-            await program_flash(hardware.value, stdout=output_cb)
+            await program_flash(console, hardware.value, stdout=output_cb)
             yield "FLASH was successully programmed"
         else:
             yield "Skipping FLASH programming"
