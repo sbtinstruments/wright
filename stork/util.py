@@ -2,7 +2,6 @@ from typing import Optional, List
 from pathlib import Path
 from dataclasses import dataclass
 import socket
-import subprocess
 
 
 @dataclass(frozen=True)
@@ -67,12 +66,6 @@ def split_file(file: Path, *, chunk_size: Optional[int] = None) -> List[FilePart
                 part_file.write(part_data)
             result.append(FilePart(part_path, offset))
     return result
-
-
-def extract_swu(swu: Path) -> None:
-    """Extract the SWU file contents to the current working directory."""
-    with swu.open("rb", 0) as f:
-        subprocess.run(["cpio", "-idv"], stdin=f, check=True)
 
 
 def get_local_ip():

@@ -1,17 +1,22 @@
-import asyncio
 import logging
 import os
 import shutil
+from datetime import datetime
+from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
+from contextlib import AsyncExitStack
 
 from ...branding import Branding
-from ...config import create_config_image
+from ...console import Console
 from ...hardware import Hardware
-from ...util import extract_swu, get_local_ip
+from ...tftp import AsyncTFTPServer
+from ...util import get_local_ip
 from .._command import StepByStepCommand
-from ._steps import reset_hw_steps
+from .._step import Instruction
 from ._validation import raise_if_bad_hostname
+from .subcommands import (boot_to_os, erase_data, install_firmware,
+                          install_software, prepare_files)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,17 +30,21 @@ async def reset_hw(
     branding: Branding,
     hostname: str,
     fsbl_elf: Path,
+    uboot_bin: Path,
     tty: Optional[Path] = None,
     tftp_host: Optional[str] = None,
     tftp_port: Optional[int] = None,
     output_cb: Optional[Callable[[str], None]] = None,
-    skip_program_flash: Optional[bool] = None,
+    skip_install_firmware: Optional[bool] = None,
     skip_system_image: Optional[bool] = None,
     skip_config_image: Optional[bool] = None,
-    restore_default_uboot_env: Optional[bool] = None,
 ) -> StepByStepCommand:
+    start = datetime.now()
+    _LOGGER.info(f'Using TTY "{tty}"')
+
     # Extra validation
     raise_if_bad_hostname(hostname, hardware)
+
     # Default arguments
     if tty is None:
         tty = Path("/dev/ttyUSB0")
@@ -43,60 +52,71 @@ async def reset_hw(
         tftp_host = get_local_ip()
     if tftp_port is None:
         tftp_port = 6969
-    # Set everything up so that the command can run
-    yield "Extract files from SWU and prepare images"
-    await prepare_files(swu, hardware, branding, hostname, fsbl_elf)
-    # Run command
-    try:
-        steps = reset_hw_steps(
+
+    async with AsyncExitStack() as stack:
+        # Set files up so that the command can run
+        stack.callback(shutil.rmtree, TEMP_DIR)
+        steps = prepare_files(
+            TEMP_DIR, swu, hardware, branding, hostname, fsbl_elf, uboot_bin, output_cb
+        )
+        async for step in steps:
+            yield step
+
+        # TFTP server
+        yield "Start TFTP server"
+        tftp_server = AsyncTFTPServer(tftp_host, tftp_port)
+        await stack.enter_async_context(tftp_server)
+
+        # Console connection
+        yield "Connect console"
+        console = Console(
+            Path(tty),
             hardware=hardware,
             hostname=hostname,
-            tty=Path(tty),
-            tftp_host=tftp_host,
-            tftp_port=tftp_port,
-            output_cb=output_cb,
-            skip_program_flash=skip_program_flash,
-            skip_system_image=skip_system_image,
-            skip_config_image=skip_config_image,
-            restore_default_uboot_env=restore_default_uboot_env,
+            output_cb=partial(output_cb, source="console"),
         )
-        # Perfect forwarding (similar to `yield from`)
-        y = None
-        while True:
-            y = yield await steps.asend(y)
-    except StopAsyncIteration:
-        pass
-    finally:
-        await steps.aclose()
-        shutil.rmtree(TEMP_DIR)
+        await stack.enter_async_context(console)
 
+        # Install firmware
+        if not skip_install_firmware:
+            steps = install_firmware(console, hardware, tftp_host, tftp_port, output_cb)
+            async for step in steps:
+                yield step
 
-async def prepare_files(*args: Any) -> None:
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _prepare_files, *args)
+        yield "Shut down hardware"
+        await console.cmd("mango pmic shutdown", wait_for_prompt=False)
 
+        yield Instruction(
+            "Do the following:\n"
+            "  1. Power off the hardware\n"
+            "  2. Remove the 2-pin jumper\n"
+            "  3. Power on the hardware"
+        )
+        await console.force_prompt()
 
-def _prepare_files(
-    swu: Path,
-    hardware: Hardware,
-    branding: Branding,
-    hostname: str,
-    fsbl_elf: Path,
-) -> None:
-    # Remove the temporary dir to avoid lingering artifacts from
-    # previous runs.
-    shutil.rmtree(TEMP_DIR, ignore_errors=True)
-    # Copy over files to the temporary dir and switch to said dir
-    TEMP_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy(swu, TEMP_DIR)
-    # Copy over the first-stage boot loader (FSBL).
-    #
-    # Note that this is NOT the FSBL that will end up on the hardware.
-    # It is merely a temporary boot loader used to copy the actual FSBL
-    # to the hardware over JTAG.
-    shutil.copy(fsbl_elf, TEMP_DIR / "fsbl.elf")
-    os.chdir(TEMP_DIR)
-    # Extract SWU contents. We will need it for later.
-    extract_swu(Path(swu.name))
-    # Create config image
-    create_config_image(hardware=hardware, branding=branding, hostname=hostname)
+        # Install software
+        steps = install_software(
+            console,
+            hardware,
+            tftp_host,
+            tftp_port,
+            skip_system_image,
+            skip_config_image,
+        )
+        async for step in steps:
+            yield step
+
+        # Boot to operating system
+        async for step in boot_to_os(console):
+            yield step
+
+        # Erase data
+        async for step in erase_data(console):
+            yield step
+
+        yield "Power off hardware"
+        await console.cmd("poweroff")
+
+    end = datetime.now()
+    delta = end - start
+    yield f"Reset hardware successful (took {delta})"

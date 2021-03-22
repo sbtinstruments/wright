@@ -1,25 +1,43 @@
 import asyncio
 import logging
+from asyncio.protocols import Protocol
+from asyncio.transports import Transport
+from types import TracebackType
+from typing import Optional, Type
 
-import tftpy
+from py3tftp.protocols import TFTPServerProtocol
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class AsyncTFTPServer(tftpy.TftpServer):
-    def __init__(self, host, port, root_dir):
-        super().__init__(root_dir)
-        self._serve_task = None
+class AsyncTFTPServer:
+    """TFTP server
+    
+    Serves files from the current working directory.
+    """
+
+    def __init__(self, host, port):
         self._host = host
         self._port = port
+        self._transport: Optional[Transport] = None
+        self._protocol: Optional[Protocol] = None
 
     async def __aenter__(self):
         loop = asyncio.get_event_loop()
-        future = loop.run_in_executor(None, self.listen, self._host, self._port)
-        self._serve_task = asyncio.ensure_future(future)
+        self._transport, self._protocol = await loop.create_datagram_endpoint(
+            lambda: TFTPServerProtocol(self._host, loop, extra_opts=None),
+            local_addr=(
+                self._host,
+                self._port,
+            ),
+        )
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(
+        self,
+        exc_type: Type[BaseException],
+        exc_value: BaseException,
+        traceback: TracebackType,
+    ) -> None:
         _LOGGER.info("Stopping TFTP server...")
-        self.stop(now=True)
-        await self._serve_task
+        self._transport.close()

@@ -1,7 +1,7 @@
 import shutil
 from importlib import resources
 from pathlib import Path
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 import subprocess
 
 from cryptography.hazmat.primitives import serialization as crypto_serialization
@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from ..branding import Branding, assets
 from ..hardware import Hardware
+from ..subprocess import Subprocess
 
 _AUTHORIZED_KEYS = """
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC9gjH94IkVLPkBF2YKbP56XSP4hOUr28IrkPzoC1kP1 frederikaalund@Frederiks-Air.lan
@@ -20,13 +21,14 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH+dVQEQaSaTT/mUNiN27bQvrC5yPdf0ujduI8Xt/5hB
 """.lstrip()
 
 
-def create_config_image(
+async def create_config_image(
     *,
     hardware: Hardware,
     branding: Branding,
     hostname: str,
     time_zone: Optional[str] = None,
     manufacturer: Optional[str] = None,
+    output_cb: Optional[Callable[[str], None]] = None,
 ):
     """Create a config.img file in the current working directory."""
     # Default arguments
@@ -56,10 +58,10 @@ def create_config_image(
     create_file(etc / "hwrevision", f"{hardware.value} 1.0.0\n")
     create_file(etc / "hw-release", _hw_release(hardware, branding, manufacturer))
     create_splash_screen(root, branding, hardware)
-    create_image(root)
+    await create_image(root, output_cb=output_cb)
 
 
-def create_image(directory: Path) -> None:
+async def create_image(directory: Path, *, output_cb: Optional[Callable[[str], None]] = None) -> None:
     """Create an image with the contents from the given directory."""
     script = f"""\
 		chown -Rh 0:0 {directory} && \
@@ -77,7 +79,8 @@ def create_image(directory: Path) -> None:
 			"{directory.name}.img" \
 			100M
     """
-    subprocess.run(["fakeroot", "sh", "-c", script], check=True)
+    args = ["sh", "-c", script]
+    await Subprocess.run("fakeroot", *args, output_cb=output_cb)
 
 
 def create_file(path: Path, contents: Union[str, bytes]) -> None:
@@ -126,7 +129,6 @@ def create_splash_screen(root: Path, branding: Branding, hardware: Hardware) -> 
     # Choose a splash screen in the first available image format
     chosen_format = _IMAGE_FORMATS[0]
     splash_screen = f"{branding.value}{chosen_format}"
-    print(f"splash_screen: {splash_screen}")
     image = resources.read_binary(assets, splash_screen)
     create_file(graphics / f"splash{chosen_format}", image)
     # Symbolic links from the root to help the second-stage boot loader

@@ -2,7 +2,7 @@ import asyncio
 from functools import partial
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import typer
 
@@ -10,6 +10,7 @@ from .. import commands
 from ..branding import Branding
 from ..config import create_config_image as cfi
 from ..hardware import Hardware
+from ..logger import OutputLogger
 
 app = typer.Typer()
 
@@ -36,6 +37,9 @@ def reset_hw(
     fsbl_elf: Path = typer.Option(
         ..., exists=True, readable=True, envvar="STORK_FSBL_ELF"
     ),
+    uboot_bin: Path = typer.Option(
+        ..., exists=True, readable=True, envvar="STORK_UBOOT_BIN"
+    ),
     # Note that "tty" is a string and not a `Path`. This is due to a bug
     # in "click" that raises an
     #
@@ -47,7 +51,7 @@ def reset_hw(
     ),
     tftp_host: Optional[str] = typer.Option(None, envvar="STORK_TFTP_HOST"),
     tftp_port: Optional[int] = typer.Option(6969, envvar="STORK_TFTP_PORT"),
-    skip_program_flash: bool = typer.Option(False, envvar="STORK_SKIP_PROGRAM_FLASH"),
+    skip_install_firmware: bool = typer.Option(False, envvar="STORK_SKIP_INSTALL_FIRMWARE"),
     skip_system_image: bool = typer.Option(False, envvar="STORK_SKIP_SYSTEM_IMAGE"),
     skip_config_image: bool = typer.Option(False, envvar="STORK_SKIP_CONFIG_IMAGE"),
     restore_default_uboot_env: bool = typer.Option(
@@ -56,32 +60,32 @@ def reset_hw(
 ):
     async def _reset_hw():
         try:
-            steps = commands.reset_hw(
-                swu,
-                hardware=hardware,
-                branding=branding,
-                hostname=hostname,
-                fsbl_elf=fsbl_elf,
-                output_cb=partial(print, end=""),
-                tty=Path(tty),
-                tftp_host=tftp_host,
-                tftp_port=tftp_port,
-                skip_program_flash=skip_program_flash,
-                skip_system_image=skip_system_image,
-                skip_config_image=skip_config_image,
-                restore_default_uboot_env=restore_default_uboot_env,
-            )
-            async for step in steps:
-                if isinstance(step, commands.StatusUpdate):
-                    print_info(step)
-                elif isinstance(step, commands.Instruction):
-                    print_info(step.text)
-                elif isinstance(step, commands.RequestConfirmation):
-                    print_info(step.text)
-                    press_enter_to_continue()
-                else:
-                    raise RuntimeError("Unknown output")
-
+            with OutputLogger() as output_logger:
+                steps = commands.reset_hw(
+                    swu,
+                    hardware=hardware,
+                    branding=branding,
+                    hostname=hostname,
+                    fsbl_elf=fsbl_elf,
+                    uboot_bin=uboot_bin,
+                    output_cb=output_logger.log,
+                    tty=Path(tty),
+                    tftp_host=tftp_host,
+                    tftp_port=tftp_port,
+                    skip_install_firmware=skip_install_firmware,
+                    skip_system_image=skip_system_image,
+                    skip_config_image=skip_config_image,
+                )
+                async for step in steps:
+                    if isinstance(step, commands.StatusUpdate):
+                        print_info(step)
+                    elif isinstance(step, commands.Instruction):
+                        print_instruction(step.text)
+                    elif isinstance(step, commands.RequestConfirmation):
+                        print_instruction(step.text)
+                        press_enter_to_continue()
+                    else:
+                        raise RuntimeError("Unknown output")
         except KeyboardInterrupt:
             _LOGGER.info("User interrupted the program")
 
@@ -89,11 +93,13 @@ def reset_hw(
 
 
 def print_info(text):
-    print("\033[7m>>>   " + text + "\033[0m")
+    print("\033[7m>>> " + text + "\033[0m")
 
+def print_instruction(text):
+    print("\033[44m>>> " + text + "\033[0m")
 
 def press_enter_to_continue():
-    print_info("Press <Enter> to continue")
+    print_instruction("Press <Enter> to continue")
     input()
 
 
