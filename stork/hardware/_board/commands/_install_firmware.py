@@ -2,65 +2,43 @@ import asyncio
 from contextlib import AsyncExitStack
 from functools import partial
 from pathlib import Path
-from typing import Callable, Optional
+from typing import TYPE_CHECKING
 
 from .... import openocd as ocd
+from ....command import StepByStepCommand
 from ....console import Console
-from ....hardware import Hardware
 from ....util import split_file
-from ..._command import StepByStepCommand
-from ..._step import RequestConfirmation
-from ._jtag_boot_to_uboot import jtag_boot_to_uboot
-from ._initialize_network import initialize_network
+
+if TYPE_CHECKING:
+    from .._green_mango import GreenMango
 
 
-async def install_firmware(
-    console: Console,
-    hardware: Hardware,
-    tftp_host: str,
-    tftp_port: int,
-    output_cb: Optional[Callable[[str], None]] = None,
-) -> StepByStepCommand:
+async def install_firmware(board: "GreenMango") -> StepByStepCommand:
     async with AsyncExitStack() as stack:
+        yield "JTAG boot"
+        await board.boot_to_jtag()
+
         # OCD server
         yield "Start OpenOCD server"
         ocd_server = ocd.Server(
-            "green_mango.cfg", output_cb=partial(output_cb, source="ocd.server")
+            "green_mango.cfg", output_cb=partial(board.output_cb, source="ocd.server")
         )
         await stack.enter_async_context(ocd_server)
-
-        # OCD client
-        yield "Connect OpenOCD client"
-        ocd_client = ocd.Client(output_cb=partial(output_cb, source="ocd.client"))
         # Wait until the server is ready
         await asyncio.sleep(2)
-        await stack.enter_async_context(ocd_client)
-
-        yield RequestConfirmation(
-            "Ensure that:\n"
-            "  1. The hardware is connected via:\n"
-            "     a) JTAG\n"
-            "     b) Serial\n"
-            "     c) Ethernet (e.g., via a USB-to-ethernet adapter)\n"
-            "  2. The 2-pin jumper is inserted\n"
-            "  3. The hardware is powered up"
-        )
 
         yield "Boot to U-boot via JTAG"
-        async for step in jtag_boot_to_uboot(ocd_client, hardware):
+        async for step in board.commands.jtag_boot_to_uboot():
             yield step
 
-        await console.force_prompt()
-
         yield "Initialize network on the hardware"
-        await initialize_network(console, tftp_host, tftp_port)
+        await board.initialize_network()
 
-        async for step in write_fw_to_flash(console, hardware.value):
+        async for step in write_fw_to_flash(board.console, board.bd.hardware.value):
             yield step
 
 
 async def write_fw_to_flash(console: Console, target: str) -> StepByStepCommand:
-    await console.force_prompt()
     yield "Probe FLASH memory"
     await console.cmd("sf probe")
     # First, erase the entire FLASH memory

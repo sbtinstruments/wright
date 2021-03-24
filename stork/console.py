@@ -2,63 +2,47 @@ import asyncio
 from functools import partial
 import itertools
 import logging
-from enum import Enum, auto
 from pathlib import Path
 from typing import Callable, Optional
 
 import serial
 
-from .hardware import Hardware
 
 _LOGGER = logging.getLogger(__name__)
-
-
-class Mode(Enum):
-    UBOOT = auto()
-    LINUX = auto()
-
 
 class Console:
     """Serial console used to send commands to the hardware.
 
-    Works both in U-boot and Linux mode.
+    Works both in U-boot and Linux.
     """
 
     def __init__(
         self,
         tty: Path,
         *,
-        hardware: Hardware,
-        hostname: str,
+        prompt: Optional[str] = None,
         baud_rate: Optional[int] = None,
-        mode: Optional[Mode] = None,
         output_cb: Optional[Callable[[str], None]] = None,
     ):
         # Argument defaults
         if baud_rate is None:
             baud_rate = 115200
-        if mode is None:
-            mode = Mode.UBOOT
         if output_cb is None:
             output_cb = partial(print, end="", flush=True)
         # Serial connection (opened in `__aenter__`)
         self._serial = serial.Serial(str(tty), baud_rate)
         # Internals
-        self._mode = mode
         self._output_cb = output_cb
         self._read_task = None
-        self._prompts = _prompts(hardware, hostname)
+        self._prompt = prompt
         self._responses = asyncio.Queue()
         self._serial_lock = asyncio.Lock()
 
-    async def set_mode(self, mode: Mode) -> None:
-        """Set the console mode.
-
-        The mode determines the prompt that we search for in the console input.
-        """
-        # We grab the serial lock since we use `_mode` while parsing serial input
+    async def set_prompt(self, prompt: str) -> None:
+        """Set the prompt that we expect to see after every command."""
+        # We grab the serial lock since we use `_prompt` while we parse serial input
         async with self._serial_lock:
-            self._mode = mode
+            self._prompt = prompt
 
     async def force_prompt(self):
         """Force the prompt to appear.
@@ -171,10 +155,10 @@ class Console:
                 # The raw serial data may contain partial responses. Therefore, we buffer
                 # it until we can recognize the prompt in it.
                 buffer += raw_serial_data
-                prompt = self._prompts[self._mode]
-                if prompt in buffer:
+                assert self._prompt is not None
+                if self._prompt in buffer:
                     # Split the buffer into individual responses (separated by the prompt).
-                    responses = buffer.split(prompt)
+                    responses = buffer.split(self._prompt)
                     # Note that `"x".split("x")` returns ["", ""]. There, there should
                     # always be at least two responses in the buffer.
                     assert len(responses) >= 2
@@ -189,6 +173,8 @@ class Console:
 
     async def __aenter__(self):
         self._serial.__enter__()
+        if self._prompt is None:
+            raise RuntimeError("You must specify the prompt first")
         self._read_task = asyncio.create_task(self._parse_serial_input())
         return self
 
@@ -200,10 +186,3 @@ class Console:
             pass
         finally:
             self._serial.__exit__()
-
-
-def _prompts(hardware: Hardware, hostname: str):
-    return {
-        Mode.UBOOT: f"\r\n{hardware.value}> ",
-        Mode.LINUX: f"\r\n\x1b[1;34mroot@{hostname}\x1b[m$ ",
-    }

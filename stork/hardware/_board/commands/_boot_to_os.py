@@ -1,23 +1,24 @@
-from stork.console import Console, Mode
+from typing import TYPE_CHECKING
 
-from ..._command import StepByStepCommand
+from ....command import StepByStepCommand
+from .._console_mode import ConsoleMode
+
+if TYPE_CHECKING:
+    from .._green_mango import GreenMango
 
 
-async def boot_to_os(
-    console: Console,
-) -> StepByStepCommand:
+async def boot_to_os(board: "GreenMango") -> StepByStepCommand:
+    console = board.console
     yield "Reset hardware and boot to Linux"
-    await console.reset()
-    await console.force_prompt()
+    await board.reset_and_wait_for_prompt()
     # Disable kernel logging as it messes with the serial output.
     # That is, sometimes the kernel will spam the serial line with
     # driver info messages. Said messages interfere with how we parse
     # the serial line.
     await console.cmd("setenv bootargs loglevel=0")
     await console.cmd("boot", wait_for_prompt=False)
-
     # Switch to Linux mode
-    await console.set_mode(Mode.LINUX)
+    await board.set_console_mode(ConsoleMode.LINUX)
     await console.wait_for_prompt()
     yield 'Kill any "sleep"-delayed startup scripts'
     # We stop all the services that may be using the /media/data path.

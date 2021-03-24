@@ -79,3 +79,13 @@ def get_local_ip():
         return s.getsockname()[0]
     finally:
         s.close()
+
+
+def get_first_tty() -> Path:
+    """Get the first available USB-connected TTY."""
+    ttys = (Path(f"/dev/ttyUSB{i}") for i in range(9))
+    existing_ttys = (tty for tty in ttys if tty.exists())
+    try:
+        return next(iter(existing_ttys))
+    except StopIteration:
+        raise "Could not determine tty"

@@ -7,6 +7,7 @@ from typing import Dict, Optional
 import typer
 
 from .. import commands
+from ..command import steps as command_steps
 from ..branding import Branding
 from ..config import create_config_image as cfi
 from ..hardware import Hardware
@@ -40,22 +41,11 @@ def reset_hw(
     uboot_bin: Path = typer.Option(
         ..., exists=True, readable=True, envvar="STORK_UBOOT_BIN"
     ),
-    # Note that "tty" is a string and not a `Path`. This is due to a bug
-    # in "click" that raises an
-    #
-    #    AttributeError: 'PosixPath' object has no attribute 'encode'
-    #
-    # when the default is of type `Path`.
-    tty: str = typer.Option(
-        "/dev/ttyUSB0", exists=True, readable=True, writable=True, envvar="STORK_TTY"
-    ),
+    tty: Optional[Path] = typer.Option(None, envvar="STORK_TTY"),
     tftp_host: Optional[str] = typer.Option(None, envvar="STORK_TFTP_HOST"),
     tftp_port: Optional[int] = typer.Option(6969, envvar="STORK_TFTP_PORT"),
-    skip_install_firmware: bool = typer.Option(False, envvar="STORK_SKIP_INSTALL_FIRMWARE"),
-    skip_system_image: bool = typer.Option(False, envvar="STORK_SKIP_SYSTEM_IMAGE"),
-    skip_config_image: bool = typer.Option(False, envvar="STORK_SKIP_CONFIG_IMAGE"),
-    restore_default_uboot_env: bool = typer.Option(
-        False, envvar="STORK_RESTORE_DEFAULT_UBOOT_ENV"
+    skip_install_firmware: bool = typer.Option(
+        False, envvar="STORK_SKIP_INSTALL_FIRMWARE"
     ),
 ):
     async def _reset_hw():
@@ -69,19 +59,17 @@ def reset_hw(
                     fsbl_elf=fsbl_elf,
                     uboot_bin=uboot_bin,
                     output_cb=output_logger.log,
-                    tty=Path(tty),
+                    tty=tty,
                     tftp_host=tftp_host,
                     tftp_port=tftp_port,
                     skip_install_firmware=skip_install_firmware,
-                    skip_system_image=skip_system_image,
-                    skip_config_image=skip_config_image,
                 )
                 async for step in steps:
-                    if isinstance(step, commands.StatusUpdate):
+                    if isinstance(step, command_steps.StatusUpdate):
                         print_info(step)
-                    elif isinstance(step, commands.Instruction):
+                    elif isinstance(step, command_steps.Instruction):
                         print_instruction(step.text)
-                    elif isinstance(step, commands.RequestConfirmation):
+                    elif isinstance(step, command_steps.RequestConfirmation):
                         print_instruction(step.text)
                         press_enter_to_continue()
                     else:
@@ -95,8 +83,10 @@ def reset_hw(
 def print_info(text):
     print("\033[7m>>> " + text + "\033[0m")
 
+
 def print_instruction(text):
     print("\033[44m>>> " + text + "\033[0m")
+
 
 def press_enter_to_continue():
     print_instruction("Press <Enter> to continue")

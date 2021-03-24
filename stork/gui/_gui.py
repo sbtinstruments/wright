@@ -12,8 +12,10 @@ from contextlib import suppress
 import PySimpleGUI as sg
 
 from .. import commands
+from ..command import steps as command_steps
 from ..branding import Branding
 from ..hardware import Hardware
+from ..hardware import raise_if_bad_hostname
 
 _CONFIG = Path("./.stork.json").absolute()
 
@@ -184,13 +186,13 @@ class WindowEventLoop(AsyncContextManager):
                     # This way, outdated instructions won't linger.
                     self._messages.update(value="", background_color="white")
                     # Switch on the step type
-                    if isinstance(step, commands.StatusUpdate):
+                    if isinstance(step, command_steps.StatusUpdate):
                         self._status.update(value=step)
-                    elif isinstance(step, commands.Instruction):
+                    elif isinstance(step, command_steps.Instruction):
                         self._messages.update(
                             value=step.text, background_color="yellow"
                         )
-                    elif isinstance(step, commands.RequestConfirmation):
+                    elif isinstance(step, command_steps.RequestConfirmation):
                         self._continue_event.clear()
                         self._continue_button.update(disabled=False)
                         self._messages.update(
@@ -268,7 +270,7 @@ def _get_parameters(values) -> Optional[tuple]:
     branding = next(br for br in Branding if br.name == values["branding"])
     hostname = values["hostname"]
     fsbl_elf = Path(values["fsbl_elf"])
-    commands.raise_if_bad_hostname(hostname, hardware)
+    raise_if_bad_hostname(hostname, hardware)
     args = (swu,)
     kwargs = {
         "hardware": hardware,
