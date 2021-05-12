@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-import asyncio
-from asyncio.streams import StreamReader, StreamWriter
-from typing import Callable, Optional, Type
+from contextlib import AsyncExitStack
+from logging import Logger, getLogger
 from types import TracebackType
-import logging
+from typing import Optional, Type
 
-_LOGGER = logging.getLogger(__name__)
+import anyio
+from anyio.abc import SocketStream
+
+from ..util import DelimitedBuffer
+
+_LOGGER = getLogger(__name__)
 
 
-_SEPARATOR = b'\x1a'
+_SEPARATOR = b"\x1a"
+
 
 class Client:
     """TCL client for OpenOCD.
-    
+
     See the following for reference:
     http://openocd.org/doc/html/Tcl-Scripting-API.html
     """
@@ -22,44 +27,73 @@ class Client:
         self,
         host: Optional[str] = None,
         *,
-        output_cb: Optional[Callable[[str], None]] = None,
+        logger: Optional[Logger] = None,
     ) -> None:
         if host is None:
             host = "localhost"
+        if logger is None:
+            logger = _LOGGER
         self._host = host
         self._port = 6666
-        self._output_cb: Optional[Callable[[str], None]] = output_cb
-        self._reader: Optional[StreamReader] = None
-        self._writer: Optional[StreamWriter] = None
+        self._logger: Logger = logger
+        self._logger_info = DelimitedBuffer(self._logger.info)
+        self._stream: Optional[SocketStream] = None
+        self._stack: Optional[AsyncExitStack] = None
 
     async def cmd(self, cmd: str) -> None:
-        # Send request
-        self._writer.write(cmd.encode() + _SEPARATOR)
-        await self._writer.drain()
-        # Wait for response
-        line = await self._reader.readuntil(_SEPARATOR)
-        # Remove the separator
-        line = line[:-len(_SEPARATOR)]
+        """Send command to the OCD server."""
+        # Early out
+        if self._stream is None:
+            raise RuntimeError("Enter client context first")
+        # Send the request
+        await self._stream.send(cmd.encode() + _SEPARATOR)
+        # Wait for a response
+        response_data = await self._stream.receive()
+        # Split the raw response. If everything goes as planned, we get something
+        # like the following:
+        #
+        #   responses[0] == b"hello world"
+        #   responses[1] == b""
+        #
+        # Note the empty `bytes` object.
+        responses = response_data.split(_SEPARATOR)
+        # `split` always returns a non-empty list. Even if the separator
+        # isn't found (in this case `split` returns the entire string as a
+        # single-element list).
+        assert len(responses) > 0
+        first_response = responses.pop(0)
+        # We expect a single response from the server. Anything else
+        # results in a warning.
+        if responses and responses[0]:
+            self._logger.warning(
+                "Server sent multiple responses. We use the "
+                "first and discard the remaining %s responses.",
+                len(responses),
+            )
+            for response in responses:
+                self._logger.debug("Discarded response: %s", response)
+        # Decode response. Warn if it fails.
         try:
-            output = line.decode()
+            output = first_response.decode()
         except UnicodeDecodeError:
-            _LOGGER.warning(f"Could not decode: {line}")
+            self._logger.warning("Could not decode: %s", first_response)
             return
-        if self._output_cb is not None:
-            self._output_cb(output)
+        self._logger_info.on_next(output)
 
     async def __aenter__(self) -> Client:
-        self._reader, self._writer = await asyncio.open_connection(
-            self._host, self._port
-        )
+        async with AsyncExitStack() as stack:
+            stack.enter_context(self._logger_info)
+            self._stream = await anyio.connect_tcp(self._host, self._port)
+            await stack.enter_async_context(self._stream)
+            # Transfer ownership to this instance
+            self._stack = stack.pop_all()
         return self
 
     async def __aexit__(
         self,
-        exc_type: Type[BaseException],
-        exc_value: BaseException,
-        traceback: TracebackType,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
     ) -> None:
-        if self._writer is not None:
-            self._writer.close()
-            await self._writer.wait_closed()
+        assert self._stack is not None
+        await self._stack.__aexit__(exc_type, exc_value, traceback)

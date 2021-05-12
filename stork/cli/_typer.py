@@ -1,31 +1,38 @@
-import asyncio
-from functools import partial
 import logging
+import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
+import anyio
 import typer
 
-from .. import commands
-from ..command import steps as command_steps
+from .. import commands, config
 from ..branding import Branding
-from ..config import create_config_image as cfi
 from ..hardware import Hardware
-from ..logger import OutputLogger
+from ._log_format import CliFormatter
 
 app = typer.Typer()
 
+_HANDLER = logging.StreamHandler(stream=sys.stdout)
+_HANDLER.setLevel(logging.DEBUG)
+_HANDLER.setFormatter(CliFormatter())
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger()  # root logger
+_LOGGER.addHandler(_HANDLER)
+_LOGGER.setLevel(logging.DEBUG)
 
 
 @app.command()
 def create_config_image(
+    dest: Path = typer.Argument(..., writable=True),
     hardware: Hardware = typer.Option(..., envvar="STORK_HARDWARE"),
     branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
     hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
-):
-    cfi(hardware=hardware, branding=branding, hostname=hostname)
+) -> None:
+    """Create config image as used in the reset-hw command."""
+    config.create_config_image(
+        dest, hardware=hardware, branding=branding, hostname=hostname
+    )
 
 
 @app.command()
@@ -35,66 +42,39 @@ def reset_hw(
     hardware: Hardware = typer.Option(..., envvar="STORK_HARDWARE"),
     branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
     hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
-    fsbl_elf: Path = typer.Option(
-        ..., exists=True, readable=True, envvar="STORK_FSBL_ELF"
-    ),
-    uboot_bin: Path = typer.Option(
-        ..., exists=True, readable=True, envvar="STORK_UBOOT_BIN"
-    ),
     tty: Optional[Path] = typer.Option(None, envvar="STORK_TTY"),
     tftp_host: Optional[str] = typer.Option(None, envvar="STORK_TFTP_HOST"),
     tftp_port: Optional[int] = typer.Option(6969, envvar="STORK_TFTP_PORT"),
     skip_install_firmware: bool = typer.Option(
         False, envvar="STORK_SKIP_INSTALL_FIRMWARE"
     ),
-):
-    async def _reset_hw():
+) -> None:
+    """Reset hardware to mint condition."""
+
+    async def _reset_hw() -> None:
         try:
-            with OutputLogger() as output_logger:
-                steps = commands.reset_hw(
-                    swu,
-                    hardware=hardware,
-                    branding=branding,
-                    hostname=hostname,
-                    fsbl_elf=fsbl_elf,
-                    uboot_bin=uboot_bin,
-                    output_cb=output_logger.log,
-                    tty=tty,
-                    tftp_host=tftp_host,
-                    tftp_port=tftp_port,
-                    skip_install_firmware=skip_install_firmware,
-                )
-                async for step in steps:
-                    if isinstance(step, command_steps.StatusUpdate):
-                        print_info(step)
-                    elif isinstance(step, command_steps.Instruction):
-                        print_instruction(step.text)
-                    elif isinstance(step, command_steps.RequestConfirmation):
-                        print_instruction(step.text)
-                        press_enter_to_continue()
-                    else:
-                        raise RuntimeError("Unknown output")
+            await commands.reset_hw(
+                swu,
+                hardware=hardware,
+                branding=branding,
+                hostname=hostname,
+                logger=_LOGGER,
+                tty=tty,
+                tftp_host=tftp_host,
+                tftp_port=tftp_port,
+                skip_install_firmware=skip_install_firmware,
+            )
         except KeyboardInterrupt:
             _LOGGER.info("User interrupted the program")
 
-    asyncio.run(_reset_hw())
-
-
-def print_info(text):
-    print("\033[7m>>> " + text + "\033[0m")
-
-
-def print_instruction(text):
-    print("\033[44m>>> " + text + "\033[0m")
-
-
-def press_enter_to_continue():
-    print_instruction("Press <Enter> to continue")
-    input()
+    anyio.run(_reset_hw)
 
 
 @app.command()
-def gui():
-    from ..gui import gui
+def gui() -> None:
+    """Show the GUI."""
+    # We import inside this function to avoid the dependency for the
+    # CLI-only use case.
+    from ..gui import gui as _gui  # pylint: disable=import-outside-toplevel
 
-    gui()
+    _gui()

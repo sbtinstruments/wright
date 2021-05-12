@@ -1,86 +1,100 @@
 from __future__ import annotations
 
-import asyncio
-from asyncio.tasks import Task
 from contextlib import suppress
-from asyncio.subprocess import PIPE, Process, STDOUT
-from types import TracebackType
-from typing import Callable, IO, Optional, Type, Union
+from logging import Logger
+from pathlib import Path
+from subprocess import STDOUT, CalledProcessError
+from typing import Any, Optional, Sequence, Union
 
-from asyncio.exceptions import CancelledError
+import anyio
+from anyio.abc import Process
+from anyio.streams.file import FileReadStream
+from anyio.streams.text import TextReceiveStream
+
+from ..util import DelimitedBuffer
 
 
-class Subprocess:
-    def __init__(
-        self,
-        program: str,
-        *args: str,
-        stdin: Union[int, IO, None] = None,
-        raise_on_rc: Optional[bool] = None,
-        terminate_on_exit: Optional[bool] = None,
-        output_cb: Optional[Callable[[str], None]] = None,
-    ) -> None:
-        self._program = program
-        self._args = args
-        self._stdin = stdin
-        if raise_on_rc is None:
-            raise_on_rc = True
-        self._raise_on_rc = raise_on_rc
-        if terminate_on_exit is None:
-            terminate_on_exit = False
-        self._terminate_on_exit = terminate_on_exit
-        self._output_cb: Optional[Callable[[str], None]] = output_cb
-        self._process: Optional[Process] = None
-        self._read_task: Optional[Task] = None
-
-    @classmethod
-    async def run(cls, *args, **kwargs) -> None:
-        """Run a subprocess to completion."""
-        async with cls(*args, **kwargs):
-            pass
-
-    async def _read(self) -> None:
-        while True:
-            stdout_line = await self._process.stdout.readline()
-            if stdout_line == b"":
-                break
-            if self._output_cb is not None:
-                self._output_cb(stdout_line.decode())
-
-    async def _cancel_tasks(self) -> None:
-        if self._read_task is not None:
-            self._read_task.cancel()
-            with suppress(CancelledError):
-                await self._read_task
-
-    async def _start(self) -> None:
-        assert self._process is None
-        self._process = await asyncio.create_subprocess_exec(
-            self._program, *self._args, stdin=self._stdin, stdout=PIPE, stderr=STDOUT
+async def run_process(
+    command: Union[str, Sequence[str]],
+    *,
+    stdin_file: Optional[Path] = None,
+    stdout_logger: Optional[Logger] = None,
+    check_rc: Optional[bool] = None,
+    **kwargs: Any,
+) -> None:
+    """Run the given command as a process."""
+    process: Optional[Process] = None
+    try:
+        process = await anyio.open_process(command, stderr=STDOUT, **kwargs)
+        await _drain_streams(
+            process, stdin_file=stdin_file, stdout_logger=stdout_logger
         )
-        assert self._read_task is None
-        self._read_task = asyncio.create_task(self._read())
+    except BaseException:
+        if process is not None:
+            # Try to gracefully terminate the process
+            process.terminate()
+            # Give the process some time to stop.
+            #
+            # Note that some processes may give some final output when they
+            # receive a signal. E.g., "The user interrupted the program" on SIGTERM.
+            # Therefore, this is also an opportunity to catch this final output
+            # before we close the streams at [2].
+            # If we don't do this, we get some nasty `AssertionError`s from
+            # deep within asyncio about "feed_data after feed_eof". This is
+            # because we close the stream (at [2]) while there is still some
+            # finaly output from the process in flux.
+            #
+            # Shield this, because the parent task may be cancelled (and if this
+            # is the case, the `_drain_streams` call will fail immediately without
+            # shielding).
+            with anyio.move_on_after(5, shield=True):  # [1]
+                await _drain_streams(process, stdout_logger=stdout_logger)
+        raise
+    finally:
+        if process is not None:
+            # If the process already stopped (gracefully), this does nothing.
+            # Otherwise, it kills the process for good.
+            with suppress(ProcessLookupError):
+                process.kill()
+            # Close the streams (stdin, stdout, and stderr). Shield this for the same
+            # reason as given for [1].
+            with anyio.CancelScope(shield=True):
+                await process.aclose()  # [2]
 
-    def terminate(self) -> None:
-        self._process.terminate()
+    assert process is not None
+    assert process.returncode is not None
+    # Check the return code (rc)
+    if check_rc and process.returncode != 0:
+        raise CalledProcessError(process.returncode, command)
 
-    async def __aenter__(self) -> Subprocess:
-        await self._start()
-        return self
 
-    async def __aexit__(
-        self,
-        exc_type: Type[BaseException],
-        exc_value: BaseException,
-        traceback: TracebackType,
-    ) -> None:
-        if self._terminate_on_exit:
-            try:
-                self.terminate()
-            except ProcessLookupError:
-                # Ignore if the process is already done
-                pass
-        rc = await self._process.wait()
-        await self._cancel_tasks()
-        if self._raise_on_rc and rc != 0:
-            raise RuntimeError(f"Process returned non-zero code: {rc}")
+async def _drain_streams(
+    process: Process,
+    *,
+    stdin_file: Optional[Path] = None,
+    stdout_logger: Optional[Logger] = None,
+) -> None:
+    async with anyio.create_task_group() as tg:
+        if process.stdin is not None and stdin_file is not None:
+            tg.start_soon(_send_to_stdin, process, stdin_file)
+        if process.stdout is not None and stdout_logger is not None:
+            tg.start_soon(_receive_from_stdout, process, stdout_logger)
+        # Wait for the process to exit normally
+        await process.wait()
+
+
+async def _send_to_stdin(process: Process, stdin_file: Path) -> None:
+    assert process.stdin is not None
+    # Forward data from file to stdin
+    async with await FileReadStream.from_path(stdin_file) as chunks:
+        async for chunk in chunks:
+            await process.stdin.send(chunk)
+
+
+async def _receive_from_stdout(process: Process, stdout_logger: Logger) -> None:
+    assert process.stdout is not None
+    # Forward data from stdout to logger
+    with DelimitedBuffer(stdout_logger.info) as logger_info:
+        stream = TextReceiveStream(process.stdout)
+        async for string in stream:  # pylint: disable=not-an-iterable
+            logger_info.on_next(string)

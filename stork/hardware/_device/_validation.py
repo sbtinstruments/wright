@@ -1,7 +1,8 @@
 from .._hardware import Hardware
 
 
-def raise_if_bad_hostname(hostname: str, hardware: Hardware):
+def raise_if_bad_hostname(hostname: str, hardware: Hardware) -> None:
+    """Raise `ValueError` if the hostname doesn't fit the hardware."""
     if len(hostname) != 9:
         raise ValueError("Hostname must be exactly 9 characters long.")
     hostname_prefixes = {

@@ -8,3 +8,12 @@ config.img
 
 # Python runtime cache
 *.pyc
+
+# Mypy cache
+.mypy_cache
+
+# Work-in-progress
+experimental_console.py
+
+# IDE settings
+/.vscode

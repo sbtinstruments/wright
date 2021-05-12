@@ -1,12 +1,12 @@
 import logging
-from sys import argv
 
 from .cli import app
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger()
 
 
-def main():
+def main() -> None:
+    """Start the application."""
     logging.basicConfig(level=logging.DEBUG)
     logging.getLogger("tftpy").setLevel(level=logging.INFO)
     app()

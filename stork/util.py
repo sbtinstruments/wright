@@ -1,7 +1,12 @@
-from typing import Optional, List
-from pathlib import Path
-from dataclasses import dataclass
+from __future__ import annotations
+
 import socket
+from dataclasses import dataclass
+from pathlib import Path
+from types import TracebackType
+from typing import Any, Callable, List, Optional, Type
+
+TEMP_DIR = Path("/tmp/stork")
 
 
 @dataclass(frozen=True)
@@ -12,8 +17,8 @@ class FilePart:
     offset: int
 
 
-def split_file(file: Path, *, chunk_size: Optional[int] = None) -> List[FilePart]:
-    """Split file into parts while skipping null-bytes.
+def split_file(file_path: Path, *, chunk_size: Optional[int] = None) -> List[FilePart]:
+    r"""Split file into parts while skipping null-bytes.
 
     Imagine that the following byte sequence represents a large file:
 
@@ -44,13 +49,13 @@ def split_file(file: Path, *, chunk_size: Optional[int] = None) -> List[FilePart
     # The sentinel is a series of null bytes. When we reach the
     # sentinel while reading the file, we start skipping.
     sentinel = bytes(chunk_size)
-    with file.open("rb") as f:
+    with file_path.open("rb") as file:
         done = False
         while not done:
             part_data = bytes()
-            offset = f.tell()
+            offset = file.tell()
             # Read until we reach the sentinel or there is no more data
-            while chunk := f.read(chunk_size):
+            while chunk := file.read(chunk_size):
                 if chunk == sentinel:
                     break
                 part_data += chunk
@@ -61,24 +66,24 @@ def split_file(file: Path, *, chunk_size: Optional[int] = None) -> List[FilePart
             if not part_data:
                 continue
             # Otherwise, we write the data out to as a file.
-            part_path = Path(f"part_offset{offset}.bin")
+            part_path = TEMP_DIR / f"{file_path.name}__offset_{offset}.bin"
             with part_path.open("wb") as part_file:
                 part_file.write(part_data)
             result.append(FilePart(part_path, offset))
     return result
 
 
-def get_local_ip():
+def get_local_ip() -> Any:
     """Return the local IP address of this machine.
 
     Inspiration: https://stackoverflow.com/a/166589/554283
     """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.connect(("8.8.8.8", 80))
     try:
-        return s.getsockname()[0]
+        return sock.getsockname()[0]
     finally:
-        s.close()
+        sock.close()
 
 
 def get_first_tty() -> Path:
@@ -87,5 +92,40 @@ def get_first_tty() -> Path:
     existing_ttys = (tty for tty in ttys if tty.exists())
     try:
         return next(iter(existing_ttys))
-    except StopIteration:
-        raise "Could not determine tty"
+    except StopIteration as exc:
+        raise RuntimeError("Could not determine tty") from exc
+
+
+class DelimitedBuffer:
+    """Split a stream into delimited chunks."""
+
+    def __init__(
+        self, on_next: Callable[[str], None], *, delimiter: Optional[str] = None
+    ) -> None:
+        self._on_next = on_next
+        self._delimiter = "\n" if delimiter is None else delimiter
+        self._buffer: str = ""
+
+    def on_next(self, text: str) -> None:
+        """Push an item into the stream."""
+        # Combine text from the buffer with the given text
+        complete_text = self._buffer + text
+        # Output the lines. The remainder goes back into the buffer
+        lines = complete_text.split(self._delimiter)
+        self._buffer = lines.pop()
+        # Print each line (if any)
+        for line in lines:
+            self._on_next(line)
+
+    def __enter__(self) -> DelimitedBuffer:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Output whatever may be in the buffer at exit."""
+        if self._buffer:
+            self._on_next(self._buffer)

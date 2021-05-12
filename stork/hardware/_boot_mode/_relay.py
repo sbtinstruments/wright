@@ -1,28 +1,30 @@
 from __future__ import annotations
-from ._boot_mode import BootMode, BootModeControl
+
+from dataclasses import dataclass
 
 from ...relay_lib_seeed import relay_get_port_status, relay_off, relay_on
+from ._abc import AbstractBootModeControl
+from ._boot_mode import BootMode
 
 
-class RelayBootModeControl(BootModeControl):
-    def __init__(self, relay_num: int) -> None:
-        self._relay_num = relay_num
+@dataclass(frozen=True)
+class RelayBootModeControl(AbstractBootModeControl):
+    """Relay-based boot mode control."""
 
-    @property
-    def mode(self) -> BootMode:
-        if relay_get_port_status(self._relay_num):
+    relay_id: int
+    default_mode: BootMode = BootMode.QSPI
+
+    def get_mode(self) -> BootMode:
+        """Return the current boot mode."""
+        if relay_get_port_status(self.relay_id):
             return BootMode.JTAG
-        else:
-            return BootMode.QSPI
+        return BootMode.QSPI
 
-    @mode.setter
-    def mode(self, value: BootMode) -> None:
+    def set_mode(self, value: BootMode) -> None:
+        """Set the boot mode."""
         if value is BootMode.JTAG:
-            relay_on(self._relay_num)
+            relay_on(self.relay_id)
         elif value is BootMode.QSPI:
-            relay_off(self._relay_num)
+            relay_off(self.relay_id)
         else:
             raise ValueError("Could not set boot mode")
-
-    def copy(self) -> RelayBootModeControl:
-        return RelayBootModeControl(self._relay_num)

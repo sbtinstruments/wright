@@ -1,22 +1,25 @@
 from __future__ import annotations
+
+from dataclasses import dataclass
+
 from ...relay_lib_seeed import relay_get_port_status, relay_off, relay_on
-from ._power import PowerControl
+from ._abc import AbstractPowerControl
 
 
-class RelayPowerControl(PowerControl):
-    def __init__(self, power_relay_num: int) -> None:
-        self._relay_num = power_relay_num
+@dataclass(frozen=True)
+class RelayPowerControl(AbstractPowerControl):
+    """Relay-based power contorl."""
 
-    @property
-    def on(self) -> bool:
-        return relay_get_port_status(self._relay_num)
+    relay_id: int
+    default_state: bool = False
 
-    @on.setter
-    def on(self, value: bool) -> None:
+    def get_state(self) -> bool:
+        """Is the power on."""
+        return relay_get_port_status(self.relay_id)
+
+    def set_state(self, value: bool) -> None:
+        """Turn the power on (True) or off (False)."""
         if value:
-            relay_on(self._relay_num)
+            relay_on(self.relay_id)
         else:
-            relay_off(self._relay_num)
-
-    def copy(self) -> RelayPowerControl:
-        return RelayPowerControl(self._relay_num)
+            relay_off(self.relay_id)

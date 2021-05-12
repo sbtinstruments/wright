@@ -1,2 +1,2 @@
+from ._any import PowerControl
 from ._relay import RelayPowerControl
-from ._power import PowerControl

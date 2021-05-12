@@ -8,10 +8,14 @@
 # http://wiki.seeed.cc/Raspberry_Pi_Relay_Board_v1.0/
 # =========================================================
 
+# TODO: Rework this library to not use globals.
+# pylint: disable=global-statement
+
 from __future__ import print_function
 
-import smbus2
 import logging
+
+import smbus2
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +50,7 @@ def relay_on(relay_num: int) -> None:
     bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
-def relay_off(relay_num):
+def relay_off(relay_num: int) -> None:
     """Turn the specified relay (by relay #) off.
 
     Call this function to turn a single relay off.
@@ -63,7 +67,7 @@ def relay_off(relay_num):
     bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
-def relay_all_on():
+def relay_all_on() -> None:
     """Turn all of the relays on.
 
     Call this function to turn all of the relays on.
@@ -76,7 +80,7 @@ def relay_all_on():
     bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
-def relay_all_off():
+def relay_all_off() -> None:
     """Turn all of the relays on.
 
     Call this function to turn all of the relays on.
@@ -89,8 +93,8 @@ def relay_all_off():
     bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
-def relay_get_port_status(relay_num):
-    """Returns the status of the specified relay (True for on, False for off)
+def relay_get_port_status(relay_num: int) -> bool:
+    """Return the status of the specified relay (True for on, False for off).
 
     Call this function to retrieve the status of a specific relay.
 
@@ -109,8 +113,8 @@ def relay_get_port_status(relay_num):
     return (DEVICE_REG_DATA & mask) == 0
 
 
-def _relay_get_port_data(relay_num):
-    """Internal function, used to retrieve binary data from the relay board.
+def _relay_get_port_data(relay_num: int) -> int:
+    """Retrieve binary data from the relay board.
 
     Args:
         relay_num (int): The relay port to query.

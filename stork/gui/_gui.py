@@ -1,28 +1,27 @@
 from __future__ import annotations
+
 import asyncio
-from functools import partial
 import json
 import logging
-from pathlib import Path
 import traceback
-from types import TracebackType
-from typing import AsyncContextManager, Optional, Type
 from contextlib import suppress
+from functools import partial
+from pathlib import Path
+from types import TracebackType
+from typing import Any, AsyncContextManager, Optional, Type
 
 import PySimpleGUI as sg
 
 from .. import commands
-from ..command import steps as command_steps
 from ..branding import Branding
-from ..hardware import Hardware
-from ..hardware import raise_if_bad_hostname
+from ..hardware import Hardware, raise_if_bad_hostname
 
 _CONFIG = Path("./.stork.json").absolute()
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _layout():
+def _layout() -> list[Any]:
     sg.theme("SystemDefaultForReal")
 
     try:
@@ -109,8 +108,7 @@ def _layout():
     ]
 
 
-
-class WindowEventLoop(AsyncContextManager):
+class WindowEventLoop(AsyncContextManager["WindowEventLoop"]):
     def __init__(self) -> None:
         self._task: Optional[asyncio.Task] = None
         self._continue_event = asyncio.Event()
@@ -124,7 +122,7 @@ class WindowEventLoop(AsyncContextManager):
         self._output: sg.Multiline = self._window["output"]
         self._status: sg.Text = self._window["status"]
 
-    async def run_forever(self):
+    async def run_forever(self) -> None:
         prev_params = None
         # Event Loop to process "events" and get the "values" of the inputs
         while True:
@@ -136,7 +134,7 @@ class WindowEventLoop(AsyncContextManager):
             if values is not None:
                 with _CONFIG.open("w") as f:
                     json.dump(values, f)
-            
+
             if event == sg.WIN_CLOSED:
                 break
 
@@ -149,10 +147,12 @@ class WindowEventLoop(AsyncContextManager):
             params_changed = prev_params != params
             prev_params = params
             if params is not None and params_changed:
-                self._messages.update(value='Press "Start" to program the board', background_color="white")
+                self._messages.update(
+                    value='Press "Start" to program the device',
+                    background_color="white",
+                )
                 self._start_button.update(disabled=False)
 
-            
             if event == "Start":
                 self._start_task_ui(params)
             elif event == "Continue":
@@ -172,7 +172,7 @@ class WindowEventLoop(AsyncContextManager):
 
         output_cb = partial(self._output.print, end="")
 
-        async def _reset_hw():
+        async def _reset_hw() -> None:
 
             try:
                 steps = commands.reset_hw(
@@ -256,15 +256,15 @@ class WindowEventLoop(AsyncContextManager):
 
     async def __aexit__(
         self,
-        exc_type: Type[BaseException],
-        exc_value: BaseException,
-        traceback: TracebackType,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
     ) -> None:
         await self._cancel_task()
         self._window.close()
 
 
-def _get_parameters(values) -> Optional[tuple]:
+def _get_parameters(values: dict[str, Any]) -> Optional[tuple]:
     swu = Path(values["swu_file"])
     hardware = next(hw for hw in Hardware if hw.name == values["hardware"])
     branding = next(br for br in Branding if br.name == values["branding"])
@@ -281,12 +281,10 @@ def _get_parameters(values) -> Optional[tuple]:
     return (args, kwargs)
 
 
-
-async def gui_async():
+async def gui_async() -> None:
     async with WindowEventLoop() as wel:
         await wel.run_forever()
 
 
-def gui():
-
+def gui() -> None:
     asyncio.run(gui_async())

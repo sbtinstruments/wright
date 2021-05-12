@@ -1,24 +1,26 @@
-import logging
 from contextlib import AsyncExitStack
 from datetime import datetime
+from logging import Logger, getLogger
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Optional
+
+from anyio.abc import TaskGroup
 
 from ...branding import Branding
-from ...command import StepByStepCommand
+from ...config import create_config_image
 from ...hardware import (
-    BoardDefinition,
+    DeviceDescription,
+    GpioBootModeControl,
     GreenMango,
     Hardware,
-    RelayBootModeControl,
     RelayPowerControl,
+    recipes,
 )
+from ...swupdate import SwuFiles
 from ...tftp import AsyncTFTPServer
-from .subcommands import prepare_files
+from ...util import TEMP_DIR
 
-_LOGGER = logging.getLogger(__name__)
-
-TEMP_DIR = Path(f"/tmp/stork")
+_LOGGER = getLogger(__name__)
 
 
 async def reset_hw(
@@ -27,61 +29,108 @@ async def reset_hw(
     hardware: Hardware,
     branding: Branding,
     hostname: str,
-    fsbl_elf: Path,
-    uboot_bin: Path,
     tty: Optional[Path] = None,
     tftp_host: Optional[str] = None,
     tftp_port: Optional[int] = None,
-    output_cb: Optional[Callable[[str], None]] = None,
+    logger: Optional[Logger] = None,
     skip_install_firmware: Optional[bool] = None,
-) -> StepByStepCommand:
-    start = datetime.now()
-
-    # Board definition
-    board_definition = BoardDefinition.with_defaults(
+) -> None:
+    """Reset hardware to mint condition."""
+    if logger is None:
+        logger = _LOGGER
+    # Device description
+    desc_kwargs: dict[str, Any] = {}
+    if tty is not None:
+        desc_kwargs["tty"] = tty
+    if tftp_host is not None:
+        desc_kwargs["tftp_host"] = tftp_host
+    if tftp_port is not None:
+        desc_kwargs["tftp_port"] = tftp_port
+    desc = DeviceDescription(
         hardware=hardware,
         power_control=RelayPowerControl(1),
-        boot_mode_control=RelayBootModeControl(4),
-        hostname=hostname,
-        tty=tty,
-        tftp_host=tftp_host,
-        tftp_port=tftp_port,
+        boot_mode_control=GpioBootModeControl(15),
+        **desc_kwargs,
+    )
+    logger.info('Using TTY "%s"', desc.tty)
+    await reset_hw2(
+        desc,
+        hostname,
+        logger,
+        swu,
+        branding=branding,
+        skip_install_firmware=skip_install_firmware,
     )
 
-    _LOGGER.info(f'Using TTY "{board_definition.tty}"')
+
+async def reset_hw2(
+    desc: DeviceDescription,
+    hostname: str,
+    logger: Logger,
+    swu: Path,
+    *,
+    branding: Branding,
+    skip_install_firmware: Optional[bool] = None,
+) -> None:
+    """Reset hardware to mint condition."""
+    start = datetime.now()
 
     async with AsyncExitStack() as stack:
-        # Set files up so that the command can run
-        steps = prepare_files(
-            TEMP_DIR, swu, hardware, branding, hostname, fsbl_elf, uboot_bin, output_cb
+        # SWU
+        logger.info("Extract files from SWU")
+        swu_logger = None if logger is None else logger.getChild("swu")
+        swu_files = await SwuFiles.from_swu(swu, TEMP_DIR, logger=swu_logger)
+        bundle = swu_files.devices[desc.hardware]
+
+        # Config image
+        logger.info("Create config image")
+        config_logger = None if logger is None else logger.getChild("config")
+        config_image = TEMP_DIR / "config.img"
+        await create_config_image(
+            config_image,
+            hardware=desc.hardware,
+            branding=branding,
+            hostname=hostname,
+            logger=config_logger,
         )
-        async for step in steps:
-            yield step
 
         # TFTP server
-        yield "Start TFTP server"
+        #
+        # Serves everything inside `TEMP_DIR`
+        logger.info("Start TFTP server")
         tftp_server = AsyncTFTPServer(
-            board_definition.tftp_host, board_definition.tftp_port
+            desc.tftp_host, desc.tftp_port, directory=TEMP_DIR
         )
         await stack.enter_async_context(tftp_server)
 
-        # Board
-        board = GreenMango(board_definition, output_cb=output_cb)
-        await stack.enter_async_context(board)
+        def _device_factory(tg: TaskGroup) -> GreenMango:
+            return GreenMango(tg, hostname, desc, logger=logger)
 
-        # Install firmware
+        # Reset firmware
         if not skip_install_firmware:
-            async for step in board.commands.install_firmware():
-                yield step
+            await recipes.retry(
+                recipes.reset_firmware,
+                bundle.firmware,
+                device_factory=_device_factory,
+                logger=logger,
+            )
 
-        # Install software
-        async for step in board.commands.install_software():
-            yield step
+        # Reset software
+        await recipes.retry(
+            recipes.reset_software,
+            bundle.software,
+            config_image,
+            device_factory=_device_factory,
+            logger=logger,
+        )
 
-        # Erase data
-        async for step in board.commands.erase_data():
-            yield step
+        # Reset data
+        await recipes.retry(
+            recipes.reset_data,
+            device_factory=_device_factory,
+            logger=logger,
+        )
 
     end = datetime.now()
     delta = end - start
-    yield f"Reset hardware successful (took {delta})"
+    logger.info(f"Reset hardware successful (took {delta})")
