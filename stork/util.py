@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import socket
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Callable, List, Optional, Type
@@ -88,7 +89,9 @@ def get_local_ip() -> Any:
 
 def get_first_tty() -> Path:
     """Get the first available USB-connected TTY."""
-    ttys = (Path(f"/dev/ttyUSB{i}") for i in range(9))
+    specific_ttys = (Path(f"/dev/ttyGreenMango{i}") for i in range(9))
+    generic_ttys = (Path(f"/dev/ttyUSB{i}") for i in range(9))
+    ttys = chain(specific_ttys, generic_ttys)
     existing_ttys = (tty for tty in ttys if tty.exists())
     try:
         return next(iter(existing_ttys))

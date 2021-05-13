@@ -175,7 +175,7 @@ class WindowEventLoop(AsyncContextManager["WindowEventLoop"]):
         async def _reset_hw() -> None:
 
             try:
-                steps = commands.reset_hw(
+                steps = commands.reset_device(
                     *params[0],
                     **params[1],
                     output_cb=output_cb,

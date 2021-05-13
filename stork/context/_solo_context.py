@@ -4,7 +4,6 @@ from types import TracebackType
 from typing import Any, AsyncContextManager, Optional, Type, TypeVar
 
 from anyio.abc import AsyncResource
-from anyio.lowlevel import checkpoint
 
 T = TypeVar("T")
 
@@ -85,18 +84,9 @@ class SoloContext(AsyncResource):
 
     async def aclose(self) -> None:
         """Close the current context (if any)."""
-        # Early out
-        if self._context is None:
-            await checkpoint()
-            return
-        try:
-            # Exit the context. The `None` arguments indicate that no
-            # exception occurred.
-            await self._context.__aexit__(None, None, None)
-        finally:
-            # No matter what, we clear the current context
-            self._context = None
-            self._context_value = _Sentinel
+        # Exit the context. The `None` arguments indicate that no
+        # exception occurred.
+        await self.__aexit__(None, None, None)
 
     async def __aenter__(self) -> SoloContext:
         # This class is not reentrant. The following asserts make sure of it.

@@ -1,1 +1,1 @@
-from ._reset_hw import reset_hw, reset_hw2
+from ._reset_device import reset_device

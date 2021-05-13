@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...relay_lib_seeed import relay_get_port_status, relay_off, relay_on
+from ....relay_lib_seeed import relay_get_port_status, relay_off, relay_on
 from ._abc import AbstractBootModeControl
 from ._boot_mode import BootMode
 

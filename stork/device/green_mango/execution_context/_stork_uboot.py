@@ -2,20 +2,21 @@ from __future__ import annotations
 
 from contextlib import AsyncExitStack
 from importlib import resources
+from logging import Logger
 from typing import TYPE_CHECKING
 
 import anyio
 
 from .... import openocd as ocd
 from ....util import TEMP_DIR
-from ..._boot_mode import BootMode
-from .. import assets
+from ... import assets
+from ...control.boot_mode import BootMode
 from ._uboot import Uboot
 
 if TYPE_CHECKING:
     from .._green_mango import GreenMango
 
-
+_CFG_FILE = TEMP_DIR / "green_mango.cfg"
 _FSBL_FILE = TEMP_DIR / "fsbl.elf"
 _UBOOT_FILE = TEMP_DIR / "u-boot.bin"
 
@@ -39,27 +40,17 @@ class StorkUboot(Uboot):
 
 async def jtag_boot_to_uboot(device: "GreenMango") -> None:
     """Boot directly to U-boot via JTAG."""
-    # FSBL
-    #
-    # Note that this is NOT the FSBL that will end up on the hardware.
-    # It is merely a temporary boot loader used to copy the actual FSBL
-    # to the hardware over JTAG.
-    device.logger.info("Extract FSBL from Python package")
-    fsbl_data = resources.read_binary(assets, "fsbl.elf")
-    _FSBL_FILE.write_bytes(fsbl_data)
-
-    # U-boot
-    #
-    # Like with the FSBL, this is NOT the U-boot that ends up on the hardware.
-    device.logger.info("Extract U-boot from Python package")
-    uboot_data = resources.read_binary(assets, "u-boot.bin")
-    _UBOOT_FILE.write_bytes(uboot_data)
+    _extract_files(logger=device.logger)
+    communication = device.link.communication
 
     async with AsyncExitStack() as stack:
         # OCD server
         device.logger.info("Start OpenOCD server")
+        commands: list[str] = []
+        if communication.jtag_usb_serial is not None:
+            commands.append(f"ftdi_serial {communication.jtag_usb_serial}")
         ocd_server = ocd.run_server_in_background(
-            logger=device.logger.getChild("ocd.server")
+            _CFG_FILE, commands, logger=device.logger.getChild("ocd.server")
         )
         await stack.enter_async_context(ocd_server)
 
@@ -69,7 +60,7 @@ async def jtag_boot_to_uboot(device: "GreenMango") -> None:
         await stack.enter_async_context(ocd_client)
 
         # Low-level OCD control
-        device.logger.info("Reset hardware")
+        device.logger.info("Reset and halt CPU")
         await ocd_client.cmd("reset halt")
         device.logger.info("Copy FSBL to device memory")
         await ocd_client.cmd(f"load_image {_FSBL_FILE} 0 elf")
@@ -83,3 +74,26 @@ async def jtag_boot_to_uboot(device: "GreenMango") -> None:
         # TODO: Call `Console.force_prompt` before we resume
         device.logger.info("Execute U-boot")
         await ocd_client.cmd("resume 0x04000000")
+
+
+def _extract_files(*, logger: Logger) -> None:
+    # FSBL
+    #
+    # Note that this is NOT the FSBL that will end up on the device.
+    # It is merely a temporary boot loader used to copy the actual FSBL
+    # to the device over JTAG.
+    logger.info("Extract FSBL from Python package")
+    fsbl_data = resources.read_binary(assets, _FSBL_FILE.name)
+    _FSBL_FILE.write_bytes(fsbl_data)
+
+    # U-boot
+    #
+    # Like with the FSBL, this is NOT the U-boot that ends up on the device.
+    logger.info("Extract U-boot from Python package")
+    uboot_data = resources.read_binary(assets, _UBOOT_FILE.name)
+    _UBOOT_FILE.write_bytes(uboot_data)
+
+    # OpenOCD config file
+    logger.info("Extract OpenOCD config file from Python package")
+    cfg_data = resources.read_binary(assets, _CFG_FILE.name)
+    _CFG_FILE.write_bytes(cfg_data)

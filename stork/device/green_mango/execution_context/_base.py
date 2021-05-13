@@ -63,7 +63,7 @@ class _ConsoleBase(_Base):
         # Console
         self._console = Console(
             self._tg,
-            self._dev.desc.tty,
+            self._dev.link.communication.tty,
             prompt,
             logger=console_logger,
         )

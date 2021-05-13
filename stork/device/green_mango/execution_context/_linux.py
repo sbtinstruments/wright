@@ -15,7 +15,8 @@ class Linux(_ConsoleBase):
     """The default linux distribution on the device."""
 
     def __init__(self, device: "GreenMango", tg: TaskGroup) -> None:
-        prompt = f"\r\n\x1b[1;34mroot@{device.hostname}\x1b[m$ "
+        communication = device.link.communication
+        prompt = f"\r\n\x1b[1;34mroot@{communication.hostname}\x1b[m$ "
         super().__init__(device, tg, prompt)
 
     async def reset_data(self) -> None:

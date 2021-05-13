@@ -3,51 +3,40 @@ from __future__ import annotations
 from contextlib import AsyncExitStack
 from logging import Logger, getLogger
 from types import TracebackType
-from typing import Optional, Type
+from typing import Any, Optional, Type
 
 import anyio
 from anyio.abc import TaskGroup
 from anyio.lowlevel import checkpoint
 
-from ._device_description import DeviceDescription
+from .._device import Device
+from .._device_description import DeviceDescription, DeviceLink
+from .._device_type import DeviceType
 from ._execution_context_manager import ExecutionContextManager
-from ._validation import raise_if_bad_hostname
 
 _LOGGER = getLogger(__name__)
 
 
-class GreenMango:
+class GreenMango(Device):
     """Device based on the SBT-developed Green Mango platform."""
 
     def __init__(
         self,
         tg: TaskGroup,
-        hostname: str,
-        desc: DeviceDescription,
+        link: DeviceLink,
         *,
         logger: Optional[Logger] = None,
     ) -> None:
-        raise_if_bad_hostname(hostname, desc.hardware)
-        # Public
-        self.hostname: str = hostname
-        self.desc = desc
-        self.logger = logger if logger is not None else _LOGGER
-        # Private
+        super().__init__(link, logger=logger)
         self._stack: Optional[AsyncExitStack] = None
-        self._power_control = desc.power_control
-        self._boot_mode_control = desc.boot_mode_control
+        self._power_control = link.control.power
+        self._boot_mode_control = link.control.boot_mode
         self._execution_context_manager = ExecutionContextManager(
             self, tg, logger=self.logger
         )
         # Expose some specific methods
         self.scoped_boot_mode = self._boot_mode_control.scoped
         self.enter_context = self._execution_context_manager.enter_context
-
-    async def hard_restart(self) -> None:
-        """Restart this device via a power cycle."""
-        self.logger.info("Restart device")
-        await self.hard_power_off()
-        self._power_on()
 
     async def hard_power_off(self) -> None:
         """Turn device off via a hard power cut."""
@@ -89,3 +78,30 @@ class GreenMango:
     ) -> None:
         assert self._stack is not None
         await self._stack.__aexit__(exc_type, exc_value, traceback)
+
+    @staticmethod
+    def from_description(
+        tg: TaskGroup, description: DeviceDescription, **kwargs: Any
+    ) -> GreenMango:
+        """Return device instance based on the given description."""
+        try:
+            cls = _TYPE_TO_CLASS[description.device_type]
+        except KeyError as exc:
+            raise ValueError(
+                "Can't create a Green Mango device from the " "given description"
+            ) from exc
+        return cls(tg, description.link, **kwargs)
+
+
+class Zeus(GreenMango):
+    """Zeus device (aka CytoQuant)."""
+
+
+class BactoBox(GreenMango):
+    """BactoBox device."""
+
+
+_TYPE_TO_CLASS = {
+    DeviceType.ZEUS: Zeus,
+    DeviceType.BACTOBOX: BactoBox,
+}

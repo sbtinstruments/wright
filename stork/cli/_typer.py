@@ -7,8 +7,8 @@ import anyio
 import typer
 
 from .. import commands, config
-from ..branding import Branding
-from ..hardware import Hardware
+from ..config.branding import Branding
+from ..device import DeviceDescription, DeviceType
 from ._log_format import CliFormatter
 
 app = typer.Typer()
@@ -25,49 +25,49 @@ _LOGGER.setLevel(logging.DEBUG)
 @app.command()
 def create_config_image(
     dest: Path = typer.Argument(..., writable=True),
-    hardware: Hardware = typer.Option(..., envvar="STORK_HARDWARE"),
+    device_type: DeviceType = typer.Option(..., envvar="STORK_DEVICE_TYPE"),
     branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
     hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
 ) -> None:
-    """Create config image as used in the reset-hw command."""
+    """Create config image as used in the reset-device command."""
     config.create_config_image(
-        dest, hardware=hardware, branding=branding, hostname=hostname
+        dest, device_type=device_type, branding=branding, hostname=hostname
     )
 
 
 @app.command()
-def reset_hw(
+def reset_device(
     swu: Path = typer.Argument(..., exists=True, readable=True),
     *,
-    hardware: Hardware = typer.Option(..., envvar="STORK_HARDWARE"),
+    device_type: DeviceType = typer.Option(..., envvar="STORK_DEVICE_TYPE"),
     branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
     hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
     tty: Optional[Path] = typer.Option(None, envvar="STORK_TTY"),
-    tftp_host: Optional[str] = typer.Option(None, envvar="STORK_TFTP_HOST"),
-    tftp_port: Optional[int] = typer.Option(6969, envvar="STORK_TFTP_PORT"),
-    skip_install_firmware: bool = typer.Option(
-        False, envvar="STORK_SKIP_INSTALL_FIRMWARE"
-    ),
+    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="STORK_JTAG_SERIAL"),
+    skip_reset_firmware: bool = typer.Option(False, envvar="STORK_SKIP_RESET_FIRMWARE"),
 ) -> None:
-    """Reset hardware to mint condition."""
+    """Reset device to mint condition."""
 
-    async def _reset_hw() -> None:
+    async def _reset_device() -> None:
         try:
-            await commands.reset_hw(
-                swu,
-                hardware=hardware,
-                branding=branding,
+            description = DeviceDescription.from_raw_args(
+                device_type=device_type,
                 hostname=hostname,
-                logger=_LOGGER,
                 tty=tty,
-                tftp_host=tftp_host,
-                tftp_port=tftp_port,
-                skip_install_firmware=skip_install_firmware,
+                jtag_usb_serial=jtag_usb_serial,
+            )
+            _LOGGER.info('Using TTY "%s"', description.link.communication.tty)
+            await commands.reset_device(
+                description,
+                swu,
+                branding,
+                skip_reset_firmware=skip_reset_firmware,
+                logger=_LOGGER,
             )
         except KeyboardInterrupt:
             _LOGGER.info("User interrupted the program")
 
-    anyio.run(_reset_hw)
+    anyio.run(_reset_device)
 
 
 @app.command()

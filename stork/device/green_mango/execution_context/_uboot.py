@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Optional
 from anyio.abc import TaskGroup
 from anyio.lowlevel import checkpoint
 
-from ....util import split_file
+from ....tftp import AsyncTFTPServer
+from ....util import TEMP_DIR, get_local_ip, split_file
 from ._base import _ConsoleBase
 
 if TYPE_CHECKING:
@@ -37,7 +38,8 @@ class Uboot(_ConsoleBase):
     """On-device U-boot installation."""
 
     def __init__(self, device: "GreenMango", tg: TaskGroup) -> None:
-        prompt = f"\r\n{device.desc.hardware.value}> "
+        # E.g. "bactobox>" or "zeus>" with some whitespace chars
+        prompt = f"\r\n{type(device).__name__.lower()}> "
         super().__init__(device, tg, prompt)
         self.mmc = Mmc()
         # This is the memory address that we use as temporary scratch space for
@@ -46,6 +48,9 @@ class Uboot(_ConsoleBase):
         self._initialized_network = False
         self._initialized_usb = False
         self._probed_flash = False
+        # TFTP (for file transfers)
+        self._tftp_host = get_local_ip()
+        self._tftp_port = 6969
 
     async def write_image_to_mmc(self, file: Path, *partitions: MmcPartition) -> None:
         """Write file system image from host to device's MMC."""
@@ -79,9 +84,7 @@ class Uboot(_ConsoleBase):
         if memory_address is None:
             memory_address = self._default_memory_address
         memory_address_hex = hex(memory_address)
-        self.logger.info(
-            f'Write memory at {memory_address_hex} to MMC partition "{partition}"'
-        )
+        self.logger.info(f'Write memory at {memory_address_hex} to "{partition}"')
         await self.cmd(
             f"mmc write {memory_address_hex} "
             f"{hex(partition.offset)} "
@@ -150,6 +153,10 @@ class Uboot(_ConsoleBase):
         """Copy the given file to the device at the given memory address."""
         if address is None:
             address = self._default_memory_address
+        if not file.is_relative_to(TEMP_DIR):
+            raise ValueError(
+                f"Can't copy {file}. Can only copy files from within {TEMP_DIR}."
+            )
         address_hex = hex(address)
         await self._initialize_network()
         self.logger.info("Copy %s to device memory at %s", str(file), address_hex)
@@ -181,15 +188,18 @@ class Uboot(_ConsoleBase):
             await checkpoint()
             self.logger.debug("Already initialized network")
             return
-        self.logger.info("Initialize network")
+        # Initialize network on host
+        await self._start_tftp_server()
+        # Initialize network on device
+        self.logger.info("Initialize network on device")
         await self._initialize_usb(force=force)
         # We just want an IP address. Not start a TFTP server.
         # Unfortunately, the `dhcp` command does both. When the latter
         # fails, it returns with error code 1. Therefore, we ignore the
         # error code.
         await self.cmd("dhcp", check_error_code=False)
-        await self.cmd(f"setenv serverip {self._dev.desc.tftp_host}")
-        await self.cmd(f"setenv tftpdstp {self._dev.desc.tftp_port}")
+        await self.cmd(f"setenv serverip {self._tftp_host}")
+        await self.cmd(f"setenv tftpdstp {self._tftp_port}")
         # Increase block and window sizes to improve transfer speeds.
         # In practice, this improves transfer speeds tenfold. E.g.,
         # from ~1 MB/s to ~10 MB/s.
@@ -199,6 +209,16 @@ class Uboot(_ConsoleBase):
         # In order to do so, we disable the "boot" aspect of it with `autostart=no`.
         await self.cmd("setenv autostart no")
         self._initialized_network = True
+
+    async def _start_tftp_server(self) -> None:
+        """Start the TFTP server that we use to send data to the device."""
+        self.logger.info("Start TFTP server")
+        # Serves everything inside `TEMP_DIR`
+        tftp_server = AsyncTFTPServer(
+            self._tftp_host, self._tftp_port, directory=TEMP_DIR
+        )
+        assert self._stack is not None
+        await self._stack.enter_async_context(tftp_server)
 
     async def _initialize_usb(self, *, force: bool = False) -> None:
         """Initialize the device for USB communication.

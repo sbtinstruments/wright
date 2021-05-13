@@ -5,7 +5,7 @@ from logging import Logger
 from pathlib import Path
 from typing import Optional
 
-from ..hardware import Hardware
+from ..device import DeviceType
 from ..subprocess import run_process
 
 _CPIO_EXE = "cpio"
@@ -23,7 +23,7 @@ class UpdateBundle:
 class SwuFiles:
     """Device-specific update bundles."""
 
-    devices: dict[Hardware, UpdateBundle]
+    devices: dict[DeviceType, UpdateBundle]
 
     @classmethod
     async def from_swu(
@@ -42,11 +42,11 @@ class SwuFiles:
             await extract_swu(swu, swu_dir, logger=logger)
         return cls(
             {
-                Hardware.BACTOBOX: UpdateBundle(
+                DeviceType.BACTOBOX: UpdateBundle(
                     swu_dir / "bactobox-boot-with-u-boot-env.bin",
                     swu_dir / "bactobox-system.img",
                 ),
-                Hardware.ZEUS: UpdateBundle(
+                DeviceType.ZEUS: UpdateBundle(
                     swu_dir / "zeus-boot-with-u-boot-env.bin",
                     swu_dir / "zeus-system.img",
                 ),

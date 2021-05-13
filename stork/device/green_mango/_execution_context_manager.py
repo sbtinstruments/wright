@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, AsyncContextManager, Optional, Type, TypeVar, 
 from anyio.abc import AsyncResource, TaskGroup
 from anyio.lowlevel import checkpoint
 
+from ...context import SoloContext
 from . import execution_context
-from ._solo_context import SoloContext
 
 if TYPE_CHECKING:
     from ._green_mango import GreenMango

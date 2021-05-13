@@ -1,23 +1,21 @@
 import logging
 from datetime import datetime
 from logging import Logger
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import anyio
-from anyio.abc import TaskGroup
 
+from ..._device_description import DeviceDescription
 from .._green_mango import GreenMango
 from ._protocol import Recipe
 
 _LOGGER = logging.getLogger(__name__)
 
-Factory = Callable[[TaskGroup], GreenMango]
-
 
 async def retry(
     recipe: Recipe,
     *args: Any,
-    device_factory: Factory,
+    device_description: DeviceDescription,
     logger: Logger,
     max_tries: Optional[int] = None,
 ) -> Any:
@@ -44,8 +42,13 @@ async def retry(
             tg_exc: Optional[BaseException] = None
             async with anyio.create_task_group() as tg:
                 try:
-                    async with device_factory(tg) as dev:
-                        result = await recipe(dev, *args)
+                    # Create a new device instance for eacy run. This way, we make
+                    # sure that each run starts from a blank slate.
+                    device = GreenMango.from_description(
+                        tg, device_description, logger=logger
+                    )
+                    async with device:
+                        result = await recipe(device, *args)
                         completed = True
                         return result
                 except BaseException as exc:

@@ -7,10 +7,10 @@ from typing import Optional, Union
 from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from ..branding import Branding, assets
-from ..hardware import Hardware
+from ..device import DeviceType
 from ..subprocess import run_process
 from ..util import TEMP_DIR
+from .branding import Branding, assets
 
 # TODO: Let's just use one of these and remove the rest.
 _AUTHORIZED_KEYS = """
@@ -26,7 +26,7 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH+dVQEQaSaTT/mUNiN27bQvrC5yPdf0ujduI8Xt/5hB
 async def create_config_image(
     dest: Path,
     *,
-    hardware: Hardware,
+    device_type: DeviceType,
     branding: Branding,
     hostname: str,
     time_zone: Optional[str] = None,
@@ -58,8 +58,8 @@ async def create_config_image(
     create_file(etc / "timezone", f"{time_zone}\n")
     (etc / "localtime").symlink_to(f"/usr/share/zoneinfo/{time_zone}")
     create_ssh_key_pair(etc / "ssh")
-    create_file(etc / "hwrevision", f"{hardware.value} 1.0.0\n")
-    create_file(etc / "hw-release", _hw_release(hardware, branding, manufacturer))
+    create_file(etc / "hwrevision", f"{device_type.value} 1.0.0\n")
+    create_file(etc / "hw-release", _hw_release(device_type, branding, manufacturer))
     create_splash_screen(root, branding)
     await create_image(root, dest, logger=logger)
 
@@ -144,13 +144,13 @@ def create_splash_screen(root: Path, branding: Branding) -> None:
 
 
 _PRETTY_NAMES = {
-    Hardware.BACTOBOX: "BactoBox",
-    Hardware.ZEUS: "Zeus",
+    DeviceType.BACTOBOX: "BactoBox",
+    DeviceType.ZEUS: "Zeus",
 }
 
 
-def _hw_release(hardware: Hardware, branding: Branding, manufacturer: str) -> str:
-    pretty_name = _PRETTY_NAMES[hardware]
+def _hw_release(device_type: DeviceType, branding: Branding, manufacturer: str) -> str:
+    pretty_name = _PRETTY_NAMES[device_type]
     return (
         f'PRETTY_NAME="{pretty_name}"\n'
         f'MANUFACTURER="{manufacturer}"\n'

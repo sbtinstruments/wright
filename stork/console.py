@@ -19,7 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class Console:
-    """Serial console used to send commands to the hardware.
+    """Serial console used to send commands to the device.
 
     Works both in U-boot and Linux.
     """

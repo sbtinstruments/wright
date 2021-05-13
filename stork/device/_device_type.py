@@ -1,6 +1,8 @@
 from enum import Enum
 
 
-class Hardware(Enum):
+class DeviceType(Enum):
+    """Symbols for a class of devices."""
+
     ZEUS = "zeus"
     BACTOBOX = "bactobox"
