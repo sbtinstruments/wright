@@ -12,8 +12,9 @@ config.img
 # Mypy cache
 .mypy_cache
 
-# Work-in-progress
+# Work-in-progress and experiments
 experimental_console.py
+stress.sh
 
 # IDE settings
 /.vscode
