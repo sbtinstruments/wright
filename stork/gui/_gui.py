@@ -1,290 +1,387 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import traceback
-from contextlib import suppress
-from functools import partial
+from datetime import datetime
+from math import inf
 from pathlib import Path
-from types import TracebackType
-from typing import Any, AsyncContextManager, Optional, Type
+from traceback import format_exc
+from typing import Any, Optional
 
+import anyio
 import PySimpleGUI as sg
+from anyio.abc import TaskGroup, TaskStatus
+from anyio.streams.memory import MemoryObjectReceiveStream
 
-from .. import commands
-from ..branding import Branding
-from ..hardware import Hardware, raise_if_bad_hostname
+from ..commands import (
+    RESET_DEVICE_STATUS_MAP,
+    ResetDeviceSettings,
+    StepSettings,
+    reset_device,
+)
+from ..config.branding import Branding
+from ..device import DeviceDescription, DeviceType
+from ..progress import (
+    Cancelled,
+    Completed,
+    Failed,
+    Idle,
+    Skipped,
+    StatusMap,
+    StatusStream,
+)
+from ._command_log import CommandLog, CommandStatus
+from ._config import CONFIG
+from ._layout import create_layout
+from ._logging import GuiFormatter, GuiHandler
 
-_CONFIG = Path("./.stork.json").absolute()
+ResetParams = tuple[DeviceDescription, Path, Branding]
 
-_LOGGER = logging.getLogger(__name__)
-
-
-def _layout() -> list[Any]:
-    sg.theme("SystemDefaultForReal")
-
-    try:
-        with _CONFIG.open("r") as f:
-            defaults = json.load(f)
-    except OSError:
-        defaults = {}
-
-    swu_layout = [
-        [
-            sg.Input(key="swu_file", default_text=defaults.get("swu_file")),
-            sg.FileBrowse(file_types=(("SWUpdate files", "*.swu"),)),
-        ],
-    ]
-
-    hardware_layout = [
-        [
-            sg.Combo(
-                key="hardware",
-                values=[hw.name for hw in Hardware],
-                default_value=defaults.get("hardware"),
-                size=(20, None),
-            ),
-        ],
-    ]
-
-    branding_layout = [
-        [
-            sg.Combo(
-                key="branding",
-                values=[hw.name for hw in Branding],
-                default_value=defaults.get("branding"),
-                size=(20, None),
-            ),
-        ],
-    ]
-
-    hostname_layout = [
-        [sg.Input(key="hostname", default_text=defaults.get("hostname"))],
-    ]
-
-    fsbl_layout = [
-        [
-            sg.Input(key="fsbl_elf", default_text=defaults.get("fsbl_elf")),
-            sg.FileBrowse(file_types=(("ELF files", "*.elf"),)),
-        ],
-    ]
-
-    parameter_layout = [
-        [
-            sg.Frame("SWUpdate file", swu_layout),
-            sg.Frame("First-stage boot loader (FSBL)", fsbl_layout),
-        ],
-        [
-            sg.Frame("Hardware", hardware_layout),
-            sg.Frame("Branding", branding_layout),
-            sg.Frame("Hostname", hostname_layout),
-        ],
-    ]
-
-    # All the stuff inside your window.
-    return [
-        [sg.Column(parameter_layout)],
-        [
-            sg.Multiline(
-                key="messages",
-                size=(80, 30),
-                font=("Monospace", 8),
-                disabled=True,
-            ),
-            sg.Multiline(
-                key="output",
-                size=(80, 30),
-                font=("Monospace", 8),
-                disabled=True,
-            ),
-        ],
-        [
-            sg.Button("Start"),
-            sg.Button("Continue", disabled=True),
-            sg.Button("Stop", disabled=True),
-            sg.StatusBar(text="", key="status", size=(80, 1)),
-        ],
-    ]
+_LOGGER = logging.getLogger()  # root logger
 
 
-class WindowEventLoop(AsyncContextManager["WindowEventLoop"]):
-    def __init__(self) -> None:
-        self._task: Optional[asyncio.Task] = None
-        self._continue_event = asyncio.Event()
+class WindowEventLoop:
+    """Event loop for the GUI."""
+
+    def __init__(self, tg: TaskGroup) -> None:
+        self._tg = tg
+        self._cancel_scope: Optional[anyio.CancelScope] = None
+        self._done: Optional[anyio.Event] = None
         # Create the Window
-        self._window = sg.Window("Stork", _layout())
+        self._window = sg.Window(
+            "Reset Device", create_layout(), enable_close_attempted_event=True
+        )
         # Widgets
-        self._start_button: sg.Button = self._window["Start"]
-        self._continue_button: sg.Button = self._window["Continue"]
-        self._stop_button: sg.Button = self._window["Stop"]
-        self._messages: sg.Multiline = self._window["messages"]
+        self._hostname_device_abbr: sg.Input = self._window["hostname_device_abbr"]
+        self._hostname_id: sg.Input = self._window["hostname_id"]
+        self._command_log_output: sg.Multiline = self._window["command_log"]
         self._output: sg.Multiline = self._window["output"]
-        self._status: sg.Text = self._window["status"]
+        self._submit: sg.Button = self._window["submit"]
+        # Progress
+        self._progress_send_stream: StatusStream
+        self._progress_receive_stream: MemoryObjectReceiveStream[StatusMap]
+        (
+            self._progress_send_stream,
+            self._progress_receive_stream,
+        ) = anyio.create_memory_object_stream(inf)
+        self._status_map = RESET_DEVICE_STATUS_MAP
+        self._tg.start_soon(self._receive_steps)
+        # Command log
+        self._command_log = CommandLog(Path("./command-log.csv"))
+        # Logging
+        handler = GuiHandler(self._output)
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(GuiFormatter())
+        _LOGGER.addHandler(handler)
 
     async def run_forever(self) -> None:
-        prev_params = None
-        # Event Loop to process "events" and get the "values" of the inputs
-        while True:
-            # This is a very crude and CPU-intensive way to integrate
-            # asyncio with PySimpleGUI.
-            await asyncio.sleep(0.01)
-            event, values = self._window.read(0)
-            # Persist values
-            if values is not None:
-                with _CONFIG.open("w") as f:
-                    json.dump(values, f)
+        """Iterate this event loop indefinitely."""
+        params: Optional[ResetParams] = None
+        prev_values: Optional[dict[str, Any]] = None
 
-            if event == sg.WIN_CLOSED:
-                break
+        initial_iteration = True
 
-            try:
-                params = _get_parameters(values)
-            except Exception as exc:
-                self._messages.update(value=str(exc), background_color="lightgrey")
-                self._start_button.update(disabled=True)
-                params = None
-            params_changed = prev_params != params
-            prev_params = params
-            if params is not None and params_changed:
-                self._messages.update(
-                    value='Press "Start" to program the device',
-                    background_color="white",
-                )
-                self._start_button.update(disabled=False)
+        with self._command_log:
+            # Event Loop to process "events" and get the "values" of the inputs
+            while True:
+                # This is a very crude and CPU-intensive way to integrate
+                # an async event loop with PySimpleGUI.
+                await anyio.sleep(0.1)
+                event, values = self._window.read(0)
 
-            if event == "Start":
-                self._start_task_ui(params)
-            elif event == "Continue":
-                self._continue_button.update(disabled=True)
-                self._continue_event.set()
-                self._messages.update(value="")
-            elif event == "Stop":
-                await self._cancel_task_ui()
+                if event == sg.WINDOW_CLOSE_ATTEMPTED_EVENT:
+                    self._tg.cancel_scope.cancel()
+                    if self._done is not None:
+                        await self._done.wait()
+                    break
 
-    def _start_task_ui(self, params) -> None:
-        # We disable the start button while the task runs. Therefore,
-        # it shouldn't be possible to start two tasks in parallel.
-        if self._task is not None:
-            assert self._task.done()
-        self._start_button.update(disabled=True)
-        self._disable_parameters(True)
+                if initial_iteration is True:
+                    self._update_command_log()
+                    initial_iteration = False
 
-        output_cb = partial(self._output.print, end="")
+                # Persist GUI state
+                filtered_values = {
+                    k: v
+                    for k, v in values.items()
+                    if not k.endswith("_status")
+                    and k != "output"
+                    and k != "command_log"
+                    and k != "Browse"
+                }
+                values_changed = prev_values != filtered_values
+                prev_values = filtered_values
+                if values_changed:
+                    with CONFIG.open("w") as config_file:
+                        json.dump(filtered_values, config_file)
 
-        async def _reset_hw() -> None:
+                    self._output.update(value="", background_color="white")
 
-            try:
-                steps = commands.reset_device(
-                    *params[0],
-                    **params[1],
-                    output_cb=output_cb,
-                )
-
-                async for step in steps:
-                    # Always clear messages when we receive a new step.
-                    # This way, outdated instructions won't linger.
-                    self._messages.update(value="", background_color="white")
-                    # Switch on the step type
-                    if isinstance(step, command_steps.StatusUpdate):
-                        self._status.update(value=step)
-                    elif isinstance(step, command_steps.Instruction):
-                        self._messages.update(
-                            value=step.text, background_color="yellow"
+                    hostname = _get_hostname(values)
+                    if self._command_log.contains(
+                        status=CommandStatus.COMPLETED,
+                        hostname=hostname,
+                    ):
+                        self._output.print(
+                            f'\n  Warning: A previous run already used the hostname "{hostname}".\n',
+                            background_color="yellow",
                         )
-                    elif isinstance(step, command_steps.RequestConfirmation):
-                        self._continue_event.clear()
-                        self._continue_button.update(disabled=False)
-                        self._messages.update(
-                            value=step.text, background_color="yellow"
+                        # Print an empty line for separation
+                        self._output.print()
+                    self._output.print('Press "Start" to reset the device')
+
+                self._validate_forms(values)
+                self._update_progress()
+                self._update_hostname_device_abbr(values)
+
+                # Check parameters when the task doesn't run. Otherwise, we may erroneously
+                # clear `_output`. E.g., while we power cycle the USB port, the TTY is not
+                # available, which raises a `ValidationError`.
+                if self._cancel_scope is None:
+                    try:
+                        params = _get_parameters(values)
+                    # Catch broad `Exception` as we want to handle all the general errors
+                    except Exception as exc:  # pylint: disable=broad-except
+                        self._output.update(
+                            value=str(exc),
+                            text_color="black",
+                            background_color="lightgrey",
                         )
-                        await self._continue_event.wait()
+                        params = None
+                        self._submit.update(disabled=True)
                     else:
-                        raise RuntimeError("Unknown step")
+                        self._submit.update(disabled=False)
 
-            except Exception as exc:  # [1]
-                tb = traceback.format_exc()
-                self._messages.update(value=tb, background_color="red")
-                _LOGGER.error("Error:", exc_info=exc)
-                raise
-            else:
-                self._start_button.update(disabled=False)
-                self._disable_parameters(False)
-                self._stop_button.update(disabled=True)
-                self._messages.update(value="Done", background_color="green")
-            finally:
-                await steps.aclose()
+                if event == "submit":
+                    if self._cancel_scope is None:
+                        # The quick user can invalidate the params and press start
+                        # almost at the same time. Therefore, we have a `None` check
+                        # here.
+                        if params is not None:
+                            settings = _get_reset_device_settings(values)
+                            self._tg.start_soon(self._start_task_ui, params, settings)
+                    else:
+                        self._tg.start_soon(self._cancel_task_ui)
 
-        self._task = asyncio.create_task(_reset_hw())
-        self._stop_button.update(disabled=False)
-
-    async def _cancel_task_ui(self):
-        self._stop_button.update(disabled=True)
-        await self._cancel_task()
-        self._messages.update(value="", background_color="white")
-        self._output.update(value="")
-        self._status.update(value="")
-        self._disable_parameters(False)
-        self._start_button.update(disabled=False)
-        self._continue_button.update(disabled=True)
-
-    async def _cancel_task(self):
-        if self._task is None:
+    async def _start_task_ui(
+        self, params: ResetParams, settings: ResetDeviceSettings
+    ) -> None:
+        # Early out if the task already runs. We need this check even though
+        # we disable the "Start" button. This is because it is possible
+        # to quickly trigger the "Start" button twice before we disable it.
+        if self._cancel_scope is not None:
             return
-        self._task.cancel()
-        # We also suppress the general `Exception` because we don't
-        # care if the task raised. We already displayed/logged any error
-        # at [1].
-        with suppress(Exception, asyncio.CancelledError):
-            await self._task
+
+        async def _reset_device(task_status: TaskStatus) -> None:
+            assert self._cancel_scope is not None
+            assert self._done is not None
+            hostname = params[0].link.communication.hostname
+            with self._cancel_scope:
+                try:
+                    task_status.started()
+                    await reset_device(
+                        *params,
+                        settings=settings,
+                        progress_stream=self._progress_send_stream,
+                        logger=_LOGGER,
+                    )
+                # Catch broad `Exception` as we want to handle all the general errors
+                except (
+                    anyio.ExceptionGroup,
+                    Exception,
+                ):  # pylint: disable=broad-except
+                    self._command_log.add(
+                        status=CommandStatus.FAILED, hostname=hostname
+                    )
+                    self._output.print(format_exc(), background_color="red")
+                else:
+                    self._increment_hostname_id()
+                    self._command_log.add(
+                        status=CommandStatus.COMPLETED, hostname=hostname
+                    )
+                    self._output.print(
+                        "\n\n\n    Done\n\n\n",
+                        text_color="white",
+                        background_color="green",
+                    )
+                finally:
+                    self._update_command_log()
+                    self._disable_parameters(False)
+                    self._submit.update(text="Start")
+                    self._done.set()
+            self._cancel_scope = None
+
+        self._disable_parameters(True)
+        self._output.update(value="")
+        self._submit.update(text="Stop", disabled=True)
+
+        self._cancel_scope = anyio.CancelScope()
+        self._done = anyio.Event()
+        await self._tg.start(_reset_device)
+
+        self._submit.update(disabled=False)
+
+    async def _cancel_task_ui(self) -> None:
+        # Early out if the task is done. We need this check even though
+        # we disable the "Stop" button. This is because it is possible
+        # to quickly trigger the "Stop" button twice before we disable it.
+        if self._cancel_scope is None:
+            return
+
+        self._submit.update(disabled=True)
+        await self._cancel_task()
+        self._submit.update(disabled=False)
+
+    async def _cancel_task(self) -> None:
+        assert self._cancel_scope is not None
+        assert self._done is not None
+        self._cancel_scope.cancel()
+        await self._done.wait()
+        self._cancel_scope = None
+
+    async def _receive_steps(self) -> None:
+        async with self._progress_receive_stream:
+            async for status_map in self._progress_receive_stream:
+                self._status_map = status_map
+
+    def _update_progress(self) -> None:
+        now = datetime.now()
+        for name, status in self._status_map.items():
+            progress_bar: sg.ProgressBar = self._window[name]
+            status_bar: sg.StatusBar = self._window[f"{name}_status"]
+            if isinstance(status, Idle):
+                progress_bar.update(0)
+                status_bar.update("Pending")
+                continue
+            if isinstance(status, Skipped):
+                progress_bar.update(0)
+                status_bar.update("Skipped")
+                continue
+            if isinstance(status, Completed):
+                progress_bar.update(100)
+                text = "Completed"
+                if status.tries > 1:
+                    text += f" (tries: {status.tries})"
+                status_bar.update(text)
+                continue
+            if isinstance(status, Failed):
+                status_bar.update("Failed")
+                continue
+            if isinstance(status, Cancelled):
+                status_bar.update("Cancelled")
+                continue
+            elapsed = now - status.begin_at
+            remaining = status.expected_duration - elapsed
+            ratio = elapsed / status.expected_duration * 100
+            progress_bar.update(ratio)
+            text = f"Max {int(remaining.total_seconds())} seconds left"
+            if status.tries > 1:
+                text += f" (tries: {status.tries})"
+            status_bar.update(text)
+
+    def _validate_forms(self, values: dict[str, Any]) -> None:
+        self._validate_form(values, "hostname_year", max_length=2)
+        self._validate_form(values, "hostname_week", max_length=2)
+        self._validate_form(values, "hostname_id", max_length=3)
+
+    def _validate_form(
+        self, values: dict[str, Any], key: str, *, max_length: Optional[int] = None
+    ) -> None:
+        widget: sg.Input = self._window[key]
+        value = values[key]
+        # Max length
+        if max_length is not None and len(value) > max_length:
+            widget.update(value[:max_length])
+
+    def _update_hostname_device_abbr(self, values: dict[str, Any]) -> None:
+        device_type = values["device_type"]
+        abbrs = {
+            "BACTOBOX": "bb",
+            "ZEUS": "zs",
+        }
+        abbr = abbrs.get(device_type, "")
+        self._hostname_device_abbr.update(value=abbr)
+
+    def _update_command_log(self) -> None:
+        self._command_log_output.update("")
+        for row in self._command_log.rows:
+            if row.status is CommandStatus.COMPLETED:
+                text_color = "white"
+                background_color = "green"
+            elif row.status is CommandStatus.FAILED:
+                text_color = "white"
+                background_color = "red"
+            else:
+                text_color = "black"
+                background_color = "white"
+            self._command_log_output.print(
+                row.hostname, text_color=text_color, background_color=background_color
+            )
+
+    def _increment_hostname_id(self) -> None:
+        try:
+            current_id = int(self._hostname_id.get())
+        except ValueError:
+            return
+        next_id = (current_id + 1) % 1000
+        value = f"{next_id:03d}"
+        self._hostname_id.update(value)
 
     def _disable_parameters(self, flag: bool) -> None:
         parameter_elements = (
             e
             for e in self._window.element_list()
-            if isinstance(
-                e,
-                (sg.Listbox, sg.Combo, sg.Input),
+            if isinstance(e, (sg.Listbox, sg.Combo))
+            or (isinstance(e, sg.Input) and not e.Key == "hostname_device_abbr")
+            or (
+                isinstance(e, (sg.Checkbox, sg.Spin))
+                and not e.Key.startswith("prepare")
             )
             or (isinstance(e, sg.Button) and e.ButtonText == "Browse")
         )
         for element in parameter_elements:
             element.update(disabled=flag)
 
-    async def __aenter__(self) -> WindowEventLoop:
-        return self
 
-    async def __aexit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
-    ) -> None:
-        await self._cancel_task()
-        self._window.close()
-
-
-def _get_parameters(values: dict[str, Any]) -> Optional[tuple]:
+def _get_parameters(values: dict[str, Any]) -> ResetParams:
+    # SWU
     swu = Path(values["swu_file"])
-    hardware = next(hw for hw in Hardware if hw.name == values["hardware"])
+    if not swu.is_file():
+        raise ValueError(f"The SWU path {swu} is not a file")
+    # Device description
+    device_type = next(dt for dt in DeviceType if dt.name == values["device_type"])
+    hostname = _get_hostname(values)
+    desc = DeviceDescription.from_raw_args(device_type=device_type, hostname=hostname)
+    # Branding
     branding = next(br for br in Branding if br.name == values["branding"])
-    hostname = values["hostname"]
-    fsbl_elf = Path(values["fsbl_elf"])
-    raise_if_bad_hostname(hostname, hardware)
-    args = (swu,)
-    kwargs = {
-        "hardware": hardware,
-        "branding": branding,
-        "hostname": hostname,
-        "fsbl_elf": fsbl_elf,
-    }
-    return (args, kwargs)
+    return (desc, swu, branding)
 
 
-async def gui_async() -> None:
-    async with WindowEventLoop() as wel:
-        await wel.run_forever()
+def _get_hostname(values: dict[str, Any]) -> str:
+    device_abbr = values["hostname_device_abbr"]
+    year = values["hostname_year"]
+    week = values["hostname_week"]
+    id_ = values["hostname_id"]
+    return f"{device_abbr}{year}{week}{id_}"
+
+
+def _get_reset_device_settings(values: dict[str, Any]) -> ResetDeviceSettings:
+    args = (
+        StepSettings(
+            values[f"{name}_enabled"],
+            values[f"{name}_max_tries"],
+        )
+        for name in RESET_DEVICE_STATUS_MAP
+        if name != "prepare"
+    )
+    return ResetDeviceSettings(*args)
+
+
+async def _gui_async() -> None:
+    async with anyio.create_task_group() as tg:
+        wel = WindowEventLoop(tg)
+        tg.start_soon(wel.run_forever)
 
 
 def gui() -> None:
-    asyncio.run(gui_async())
+    """Start the GUI."""
+    anyio.run(_gui_async)

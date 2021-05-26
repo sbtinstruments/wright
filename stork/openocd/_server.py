@@ -4,6 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from pathlib import Path
+from subprocess import CalledProcessError, SubprocessError
 from typing import Any, AsyncIterator, Optional, Sequence
 
 import anyio
@@ -12,6 +13,10 @@ from ..subprocess import run_process
 
 _LOGGER = getLogger(__name__)
 _OPENOCD_EXE = os.environ.get("STORK_OPENOCD_EXE", "openocd")
+
+
+class ServerError(Exception):
+    """General OpenOCD server error."""
 
 
 @asynccontextmanager
@@ -33,10 +38,8 @@ async def run_server_in_background(*args: Any, **kwargs: Any) -> AsyncIterator[N
         # E.g., the "Listening on port 3333 for gdb connections" message.
         # The current `sleep(2)` approach is a bit crude.
         await anyio.sleep(2)
-        try:
-            yield
-        finally:
-            tg.cancel_scope.cancel()
+        yield
+        tg.cancel_scope.cancel()
 
 
 async def run_server(
@@ -62,5 +65,17 @@ async def run_server(
     if debug:
         args.append("--debug")
     process_command = (_OPENOCD_EXE, *args)
+    # The OpenOCD process doesn't stop on error but simply logs the error instead.
+    # We want it to stop on error. Therefore, we search the output and manually
+    # stop the process when we find an error message.
+    error_regex = r"Error: .*"
     # Start the server process
-    await run_process(process_command, check_rc=False, stdout_logger=logger)
+    try:
+        await run_process(
+            process_command,
+            check_rc=False,
+            stdout_logger=logger,
+            error_regex=error_regex,
+        )
+    except SubprocessError as exc:
+        raise ServerError(exc) from exc

@@ -1,5 +1,6 @@
 import logging
 import sys
+from functools import partial
 from pathlib import Path
 from typing import Optional
 
@@ -30,9 +31,14 @@ def create_config_image(
     hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
 ) -> None:
     """Create config image as used in the reset-device command."""
-    config.create_config_image(
-        dest, device_type=device_type, branding=branding, hostname=hostname
+    command = partial(
+        config.create_config_image,
+        dest,
+        device_type=device_type,
+        branding=branding,
+        hostname=hostname,
     )
+    anyio.run(command)
 
 
 @app.command()
@@ -47,27 +53,27 @@ def reset_device(
     skip_reset_firmware: bool = typer.Option(False, envvar="STORK_SKIP_RESET_FIRMWARE"),
 ) -> None:
     """Reset device to mint condition."""
-
-    async def _reset_device() -> None:
-        try:
-            description = DeviceDescription.from_raw_args(
-                device_type=device_type,
-                hostname=hostname,
-                tty=tty,
-                jtag_usb_serial=jtag_usb_serial,
-            )
-            _LOGGER.info('Using TTY "%s"', description.link.communication.tty)
-            await commands.reset_device(
-                description,
-                swu,
-                branding,
-                skip_reset_firmware=skip_reset_firmware,
-                logger=_LOGGER,
-            )
-        except KeyboardInterrupt:
-            _LOGGER.info("User interrupted the program")
-
-    anyio.run(_reset_device)
+    # Device description (translate CLI args)
+    description = DeviceDescription.from_raw_args(
+        device_type=device_type,
+        hostname=hostname,
+        tty=tty,
+        jtag_usb_serial=jtag_usb_serial,
+    )
+    _LOGGER.info('Using TTY "%s"', description.link.communication.tty)
+    # Command settings (translate CLI args)
+    reset_firmware_settings = commands.StepSettings(not skip_reset_firmware)
+    settings = commands.ResetDeviceSettings(reset_firmware_settings)
+    # Run command
+    command = partial(
+        commands.reset_device,
+        description,
+        swu,
+        branding,
+        settings=settings,
+        logger=_LOGGER,
+    )
+    anyio.run(command)
 
 
 @app.command()

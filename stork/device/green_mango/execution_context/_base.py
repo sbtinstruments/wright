@@ -6,6 +6,7 @@ from logging import Logger
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, AsyncContextManager, Optional, Type
 
+import anyio
 from anyio.abc import TaskGroup
 
 from ....console import Console
@@ -53,7 +54,14 @@ class _Base(AsyncContextManager["_Base"]):
 
 
 class _ConsoleBase(_Base):
-    def __init__(self, device: "GreenMango", tg: TaskGroup, prompt: str) -> None:
+    def __init__(
+        self,
+        device: "GreenMango",
+        tg: TaskGroup,
+        prompt: str,
+        *,
+        force_prompt_timeout: Optional[int] = None,
+    ) -> None:
         super().__init__(device, tg)
         # Logger for the console
         if self._logger is None:
@@ -67,6 +75,7 @@ class _ConsoleBase(_Base):
             prompt,
             logger=console_logger,
         )
+        self._force_prompt_timeout = force_prompt_timeout
         self._stack: Optional[AsyncExitStack] = None
 
     async def cmd(self, *args: Any, **kwargs: Any) -> Any:
@@ -88,7 +97,8 @@ class _ConsoleBase(_Base):
     async def __aenter__(self) -> _ConsoleBase:
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(self._console)
-            await self._console.force_prompt()
+            with anyio.fail_after(self._force_prompt_timeout):
+                await self._console.force_prompt()
             # Transfer ownership to this instance
             self._stack = stack.pop_all()
         self._entered = True

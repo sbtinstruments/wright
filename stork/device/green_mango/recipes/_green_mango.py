@@ -19,9 +19,7 @@ async def reset_firmware(device: GreenMango, firmware_image: Path) -> None:
         await uboot.write_image_to_flash(firmware_image)
 
 
-async def reset_software(
-    device: GreenMango, software_image: Path, config_image: Path
-) -> None:
+async def reset_software(device: GreenMango, software_image: Path) -> None:
     """Remove any existing software and write the given images to the device."""
     uboot = await device.enter_context(execution_context.Uboot)
     await uboot.partition_mmc()
@@ -29,7 +27,7 @@ async def reset_software(
     # new partitioning.
     await device.hard_power_off()
 
-    with anyio.fail_after(60):
+    with anyio.fail_after(70):
         uboot = await device.enter_context(execution_context.Uboot)
         # Write to both "system" partitions so that we have a working fall-back
         # in case of a broken (interrupted) software update. This is part of the
@@ -38,7 +36,10 @@ async def reset_software(
             software_image, uboot.mmc.system0, uboot.mmc.system1
         )
 
-    with anyio.fail_after(30):
+
+async def reset_config(device: GreenMango, config_image: Path) -> None:
+    """Remove any existing config and write the given images to the device."""
+    with anyio.fail_after(40):
         uboot = await device.enter_context(execution_context.Uboot)
         # There is a single copy of the config image
         await uboot.write_image_to_mmc(config_image, uboot.mmc.config)

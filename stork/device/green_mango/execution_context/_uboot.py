@@ -37,10 +37,13 @@ class Mmc:
 class Uboot(_ConsoleBase):
     """On-device U-boot installation."""
 
-    def __init__(self, device: "GreenMango", tg: TaskGroup) -> None:
-        # E.g. "bactobox>" or "zeus>" with some whitespace chars
-        prompt = f"\r\n{type(device).__name__.lower()}> "
-        super().__init__(device, tg, prompt)
+    def __init__(
+        self, device: "GreenMango", tg: TaskGroup, prompt: Optional[str] = None
+    ) -> None:
+        if prompt is None:
+            # E.g. "bactobox>" or "zeus>" with some whitespace chars
+            prompt = f"\r\n{type(device).__name__.lower()}> "
+        super().__init__(device, tg, prompt, force_prompt_timeout=5)
         self.mmc = Mmc()
         # This is the memory address that we use as temporary scratch space for
         # e.g., file transfers.
@@ -173,7 +176,12 @@ class Uboot(_ConsoleBase):
 
     async def boot_to_linux(self) -> None:
         """Start the linux boot process."""
-        await self.cmd("boot", wait_for_prompt=False)
+        # Note that we don't use the "boot" command since it also does some PMIC
+        # checks that can cause the device to shut down early. E.g., if the device
+        # thinks that it woke because we inserted the power cable.
+        # Instead, we run the "dualcopy_mmcboot" command directly, which takes us
+        # straight into the Linux distribution stored on the device.
+        await self.cmd("run dualcopy_mmcboot", wait_for_prompt=False)
         # At this point, this U-boot context is no longer valid. Therefore,
         # we close this context.
         await self.aclose()

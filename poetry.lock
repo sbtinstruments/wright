@@ -261,8 +261,8 @@ cp2110 = ["hidapi"]
 
 [[package]]
 name = "pysimplegui"
-version = "4.40.0"
-description = "Python GUIs for Humans. Launched in 2018. It's 2021 & PySimpleGUI is an ACTIVE & supported project. Super-simple to create custom GUI's. 300 Demo programs & Cookbook for rapid start. Extensive documentation. Main docs at www.PySimpleGUI.org. Your success is the focus. Examples using Machine Learning (GUI, OpenCV Integration), Rainmeter Style Desktop Widgets, Matplotlib + Pyplot, PIL support, add GUI to command line scripts, PDF & Image Viewers. Great for beginners & advanced GUI programmers"
+version = "4.41.2"
+description = "Python GUIs for Humans. Launched in 2018. It's 2021 & PySimpleGUI is an ACTIVE & supported project. Super-simple to create custom GUI's. 300 Demo programs & Cookbook for rapid start. Extensive documentation. Main docs at www.PySimpleGUI.org. Fun & your success are the focus. Examples using Machine Learning (GUI, OpenCV Integration), Rainmeter Style Desktop Widgets, Matplotlib + Pyplot, PIL support, add GUI to command line scripts, PDF & Image Viewers. Great for beginners & advanced GUI programmers"
 category = "main"
 optional = true
 python-versions = "*"
@@ -570,8 +570,8 @@ pyserial = [
     {file = "pyserial-3.5.tar.gz", hash = "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb"},
 ]
 pysimplegui = [
-    {file = "PySimpleGUI-4.40.0-py3-none-any.whl", hash = "sha256:e0a08b64eda98d4cdbb4261be1c3a6be6c57478d4d22e0d86190814e69581609"},
-    {file = "PySimpleGUI-4.40.0.tar.gz", hash = "sha256:5813a05f0da0fac1b56ec289d105b51841cc97bea8aca12d0896011969bfbc09"},
+    {file = "PySimpleGUI-4.41.2-py3-none-any.whl", hash = "sha256:f6ed99b0f38344593d946a94a1f6ae5ee93b75058acb03f43f42d6ebd186eeeb"},
+    {file = "PySimpleGUI-4.41.2.tar.gz", hash = "sha256:cf42d9f61f28c8e790a9c031ce900a9cee5fd2f950da2f055ed36bbc487dcf11"},
 ]
 regex = [
     {file = "regex-2021.4.4-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:619d71c59a78b84d7f18891fe914446d07edd48dc8328c8e149cbe0929b4e000"},

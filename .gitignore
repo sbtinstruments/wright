@@ -1,10 +1,7 @@
-# E.g., first-stage boot loader
-*.elf
-# SWUpdate files
+# Working and run-time files
 *.swu
-# Config image
-config/
-config.img
+.reset-board-gui.json
+command-log.csv
 
 # Python runtime cache
 *.pyc

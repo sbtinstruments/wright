@@ -17,7 +17,7 @@ class Linux(_ConsoleBase):
     def __init__(self, device: "GreenMango", tg: TaskGroup) -> None:
         communication = device.link.communication
         prompt = f"\r\n\x1b[1;34mroot@{communication.hostname}\x1b[m$ "
-        super().__init__(device, tg, prompt)
+        super().__init__(device, tg, prompt, force_prompt_timeout=30)
 
     async def reset_data(self) -> None:
         """Remove all data on this device."""
