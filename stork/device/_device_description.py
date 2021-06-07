@@ -6,6 +6,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field, validator
 
 from ..util import get_first_tty
+from ._device_condition import DeviceCondition
 from ._device_type import DeviceType
 from ._validation import raise_if_bad_hostname
 from .control import DeviceControl
@@ -32,7 +33,7 @@ class DeviceCommunication(BaseModel):
         return value
 
     class Config:  # pylint: disable=too-few-public-methods
-        allow_mutation = False
+        frozen = True
 
 
 class DeviceLink(BaseModel):
@@ -44,7 +45,7 @@ class DeviceLink(BaseModel):
     communication: DeviceCommunication
 
     class Config:  # pylint: disable=too-few-public-methods
-        allow_mutation = False
+        frozen = True
 
 
 class DeviceDescription(BaseModel):
@@ -54,6 +55,8 @@ class DeviceDescription(BaseModel):
     device_type: DeviceType
     # Connection to the device by which we can, e.g., turn it on and send data.
     link: DeviceLink
+    # How used the device is from a software perspective
+    condition: DeviceCondition = DeviceCondition.UNKNOWN
 
     @validator("link")
     def _hostname_is_valid(  # pylint: disable=no-self-argument
@@ -67,7 +70,7 @@ class DeviceDescription(BaseModel):
         return value
 
     class Config:  # pylint: disable=too-few-public-methods
-        allow_mutation = False
+        frozen = True
 
     @classmethod
     def from_raw_args(

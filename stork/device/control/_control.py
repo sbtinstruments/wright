@@ -11,4 +11,4 @@ class DeviceControl(BaseModel):
     boot_mode: BootModeControl = GpioBootModeControl(15)
 
     class Config:  # pylint: disable=too-few-public-methods
-        allow_mutation = False
+        frozen = True

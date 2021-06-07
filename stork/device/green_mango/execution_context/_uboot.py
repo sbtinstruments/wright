@@ -38,7 +38,11 @@ class Uboot(_ConsoleBase):
     """On-device U-boot installation."""
 
     def __init__(
-        self, device: "GreenMango", tg: TaskGroup, prompt: Optional[str] = None
+        self,
+        device: "GreenMango",
+        tg: TaskGroup,
+        *,
+        prompt: Optional[str] = None,
     ) -> None:
         if prompt is None:
             # E.g. "bactobox>" or "zeus>" with some whitespace chars
@@ -266,11 +270,5 @@ class Uboot(_ConsoleBase):
         await self.cmd("usb start")
         self._initialized_usb = True
 
-    async def _boot(self) -> None:
+    async def _on_enter_pre_prompt(self) -> None:
         await self._dev.hard_restart()
-
-    async def __aenter__(self) -> Uboot:
-        await self._boot()
-        # Enter console
-        await super().__aenter__()
-        return self

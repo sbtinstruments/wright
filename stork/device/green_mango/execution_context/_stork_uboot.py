@@ -38,9 +38,9 @@ class StorkUboot(Uboot):
         # TODO: Change hostname of built-in U-boot to something generic like
         # "green mango".
         prompt = f"\r\nbactobox> "
-        super().__init__(device, tg, prompt)
+        super().__init__(device, tg, prompt=prompt)
 
-    async def _boot(self) -> None:
+    async def _on_enter_pre_prompt(self) -> None:
         with self._dev.scoped_boot_mode(BootMode.JTAG):
             await self._dev.hard_restart()
             # The Zynq chip does its boot mode check within the first 100 ms.

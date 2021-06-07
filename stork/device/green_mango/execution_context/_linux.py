@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
+import anyio
 from anyio.abc import TaskGroup
 
 from ._base import _ConsoleBase
@@ -27,17 +28,23 @@ class Linux(_ConsoleBase):
         await self.cmd("umount /media/data", check_error_code=False)
         await self.cmd("yes | mkfs.ext4 -L data /dev/mmcblk0p4")
 
+    async def _do_pre_prompt(self) -> None:
+        await self._dev.hard_restart()
+        # Wait a moment before we spam the serial line in search of the prompt.
+        # Otherwise, we enter U-boot instead.
+        await anyio.sleep(3)
+
 
 class QuietLinux(Linux):
     """Linux with a quiet kernel log level."""
 
-    async def __aenter__(self) -> QuietLinux:
-        # Enter U-boot first so that we can set some boot flags
-        # for Linux to make it quiet.
-        uboot = await self._dev.enter_context(Uboot)
-        await uboot.boot_to_quiet_linux()
-        # Enter the Linux console
-        await super().__aenter__()
+    async def _on_enter_pre_prompt(self) -> None:
+        # Enter U-boot first so that we can set some boot flags for Linux to make
+        # it quiet.
+        async with Uboot.enter_context(self._dev) as uboot:
+            await uboot.boot_to_quiet_linux()
+
+    async def _on_enter_post_prompt(self) -> None:
         self.logger.info('Kill any "sleep"-delayed startup scripts')
         # We stop all the services that may be using the /media/data path.
         # Kill any delayed scripts first.
@@ -55,4 +62,3 @@ class QuietLinux(Linux):
         # launching processes are killed as well.
         await self.cmd("kill `ps | awk '/[t]elegraf/ {print $1}'`")
         await self.cmd("kill `ps | awk '/[i]nfluxd/ {print $1}'`")
-        return self
