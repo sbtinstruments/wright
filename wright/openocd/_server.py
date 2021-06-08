@@ -12,7 +12,7 @@ import anyio
 from ..subprocess import run_process
 
 _LOGGER = getLogger(__name__)
-_OPENOCD_EXE = os.environ.get("STORK_OPENOCD_EXE", "openocd")
+_OPENOCD_EXE = os.environ.get("WRIGHT_OPENOCD_EXE", "openocd")
 
 
 class ServerError(Exception):

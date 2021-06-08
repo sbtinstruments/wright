@@ -26,9 +26,9 @@ _LOGGER.setLevel(logging.DEBUG)
 @app.command()
 def create_config_image(
     dest: Path = typer.Argument(..., writable=True),
-    device_type: DeviceType = typer.Option(..., envvar="STORK_DEVICE_TYPE"),
-    branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
-    hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
+    device_type: DeviceType = typer.Option(..., envvar="WRIGHT_DEVICE_TYPE"),
+    branding: Branding = typer.Option(..., envvar="WRIGHT_BRANDING"),
+    hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
 ) -> None:
     """Create config image as used in the reset-device command."""
     command = partial(
@@ -45,12 +45,12 @@ def create_config_image(
 def reset_device(
     swu: Path = typer.Argument(..., exists=True, readable=True),
     *,
-    device_type: DeviceType = typer.Option(..., envvar="STORK_DEVICE_TYPE"),
-    branding: Branding = typer.Option(..., envvar="STORK_BRANDING"),
-    hostname: str = typer.Option(..., envvar="STORK_HOSTNAME"),
-    tty: Optional[Path] = typer.Option(None, envvar="STORK_TTY"),
-    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="STORK_JTAG_SERIAL"),
-    skip_reset_firmware: bool = typer.Option(False, envvar="STORK_SKIP_RESET_FIRMWARE"),
+    device_type: DeviceType = typer.Option(..., envvar="WRIGHT_DEVICE_TYPE"),
+    branding: Branding = typer.Option(..., envvar="WRIGHT_BRANDING"),
+    hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
+    tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
+    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_SERIAL"),
+    skip_reset_firmware: bool = typer.Option(False, envvar="WRIGHT_SKIP_RESET_FIRMWARE"),
 ) -> None:
     """Reset device to mint condition."""
     # Device description (translate CLI args)

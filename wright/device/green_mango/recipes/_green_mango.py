@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 async def reset_firmware(device: GreenMango, firmware_image: Path) -> None:
     """Remove any existing firmware and write the given image to the device."""
     with anyio.fail_after(110):
-        async with execution_context.StorkUboot.enter_context(device) as uboot:
+        async with execution_context.ExternalUboot.enter_context(device) as uboot:
             # First, erase the entire FLASH memory
             await uboot.erase_flash()
             # Second, write the firmware image to FLASH memory.

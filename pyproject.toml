@@ -5,7 +5,7 @@ requires = ["poetry-core>=1.0.0"]
 [tool.poetry]
 authors = ["Frederik Aalund <fpa@sbtinstruments.com>"]
 description = ""
-name = "stork"
+name = "wright"
 version = "0.1.0"
 
 [tool.poetry.dependencies]
@@ -32,7 +32,7 @@ rope = "^0.18.0"
 "gui" = ["PySimpleGUI"]
 
 [tool.poetry.scripts]
-shipyard = 'stork.gui:gui'
+shipyard = 'wright.gui:gui'
 
 [tool.black]
 target-version = ['py38']

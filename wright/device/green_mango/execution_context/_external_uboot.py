@@ -24,8 +24,8 @@ _FSBL_FILE = TEMP_DIR / "fsbl.elf"
 _UBOOT_FILE = TEMP_DIR / "u-boot.bin"
 
 
-class StorkUboot(Uboot):
-    """Stork's built-in version of U-boot.
+class ExternalUboot(Uboot):
+    """The version of U-boot contained in this library.
 
     This does not rely in an existing U-boot installation on the device (in
     contrast to `Uboot`).

@@ -8,12 +8,11 @@ from typing import Any, Optional, Type
 import anyio
 from anyio.lowlevel import checkpoint
 
-from stork.device.green_mango import execution_context
-
 from .._device import Device
 from .._device_condition import DeviceCondition
 from .._device_description import DeviceDescription, DeviceLink
 from .._device_type import DeviceType
+from ._green_mango import execution_context
 
 _LOGGER = getLogger(__name__)
 

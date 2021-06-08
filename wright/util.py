@@ -7,7 +7,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Callable, List, Optional, Type
 
-TEMP_DIR = Path("/tmp/stork")
+TEMP_DIR = Path("/tmp/wright")
 
 
 @dataclass(frozen=True)
