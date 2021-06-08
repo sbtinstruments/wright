@@ -31,6 +31,9 @@ rope = "^0.18.0"
 [tool.poetry.extras]
 "gui" = ["PySimpleGUI"]
 
+[tool.poetry.scripts]
+shipyard = 'stork.gui:gui'
+
 [tool.black]
 target-version = ['py38']
 

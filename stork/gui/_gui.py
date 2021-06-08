@@ -21,6 +21,7 @@ from ..commands import (
 )
 from ..config.branding import Branding
 from ..device import DeviceDescription, DeviceType
+from ..logging import set_logging_defaults
 from ..progress import (
     Cancelled,
     Completed,
@@ -384,4 +385,5 @@ async def _gui_async() -> None:
 
 def gui() -> None:
     """Start the GUI."""
+    set_logging_defaults()
     anyio.run(_gui_async)

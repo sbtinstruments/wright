@@ -1,14 +1,10 @@
-import logging
-
 from .cli import app
-
-_LOGGER = logging.getLogger()
+from .logging import set_logging_defaults
 
 
 def main() -> None:
-    """Start the application."""
-    logging.basicConfig(level=logging.DEBUG)
-    logging.getLogger("tftpy").setLevel(level=logging.INFO)
+    """Start the CLI application."""
+    set_logging_defaults()
     app()
 
 
