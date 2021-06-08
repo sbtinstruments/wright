@@ -12,6 +12,7 @@ command-log.csv
 # Work-in-progress and experiments
 experimental_console.py
 stress.sh
+test.py
 
 # IDE settings
 /.vscode
