@@ -115,6 +115,7 @@ class _ConsoleBase(_Base):
         prompt: str,
         *,
         force_prompt_timeout: Optional[int] = None,
+        enter_force_prompt_delay: Optional[int] = None,
     ) -> None:
         super().__init__(device, tg)
         # Logger for the console
@@ -130,6 +131,7 @@ class _ConsoleBase(_Base):
             logger=console_logger,
         )
         self._force_prompt_timeout = force_prompt_timeout
+        self._enter_force_prompt_delay = enter_force_prompt_delay
         self._stack: Optional[AsyncExitStack] = None
 
     async def cmd(self, *args: Any, **kwargs: Any) -> Any:
@@ -178,6 +180,8 @@ class _ConsoleBase(_Base):
         async with AsyncExitStack() as stack:
             # Prompt
             await stack.enter_async_context(self._console)
+            if self._enter_force_prompt_delay is not None:
+                await anyio.sleep(self._enter_force_prompt_delay)
             await self._force_prompt()
             # Mark as "entered" already, so that the post prompt step can
             # issue commands.

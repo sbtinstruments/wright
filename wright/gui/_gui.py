@@ -195,7 +195,9 @@ class WindowEventLoop:
                     )
                     self._output.print(format_exc(), background_color="red")
                 else:
-                    self._increment_hostname_id()
+                    # Increment hostname ID if we changed it
+                    if settings.reset_config.enabled:
+                        self._increment_hostname_id()
                     self._command_log.add(
                         status=CommandStatus.COMPLETED, hostname=hostname
                     )

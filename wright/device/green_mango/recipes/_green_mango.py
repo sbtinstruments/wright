@@ -47,6 +47,14 @@ async def reset_config(device: GreenMango, config_image: Path) -> None:
 
 async def reset_data(device: GreenMango) -> None:
     """Remove all data on the device."""
-    with anyio.fail_after(60):
+    # TODO: Find an alternative execution context for this step.
+    # Currently, we rely on the device's Linux distribution (via `QuietLinux`).
+    # This is brittle. Slight changes to, e.g., the init scripts can invalidate
+    # this recipe. For example, when we renamed "/etc/init.d/Amonit" to
+    # "/etc/init.d/S99monit".
+    # This step is also very slow because we have to wait for the Linux distribution
+    # to fully boot. All we really need to do is format an ext4 partition. There
+    # must be a better way.
+    with anyio.fail_after(90):
         async with execution_context.QuietLinux.enter_context(device) as linux:
             await linux.reset_data()

@@ -12,7 +12,7 @@ from .._device import Device
 from .._device_condition import DeviceCondition
 from .._device_description import DeviceDescription, DeviceLink
 from .._device_type import DeviceType
-from ._green_mango import execution_context
+from . import execution_context
 
 _LOGGER = getLogger(__name__)
 
@@ -36,7 +36,7 @@ class GreenMango(Device):
         self._boot_mode_control = link.control.boot_mode
         # It's not the responsibility of this class to keep track of the execution
         # context. It's up to the user to manage the current execution context.
-        # We simply provde the `context` variable as a convenience to help the user
+        # We simply provde the `context_type` variable as a convenience to help the user
         # keep track.
         # This class does, however, set `context` to `None` on, e.g., power off.
         self.context_type: Optional[Type[execution_context.Any]] = None

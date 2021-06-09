@@ -32,7 +32,7 @@ rope = "^0.18.0"
 "gui" = ["PySimpleGUI"]
 
 [tool.poetry.scripts]
-shipyard = 'wright.gui:gui'
+shipyard-gui = 'wright.gui:gui'
 
 [tool.black]
 target-version = ['py38']
