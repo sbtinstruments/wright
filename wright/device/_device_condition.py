@@ -21,13 +21,17 @@ class DeviceCondition(Enum):
     # The device is unusable (e.g., unable to boot)
     BRICKED = "bricked"
 
+    def to_int(self) -> int:
+        """Return the integer value of this condition."""
+        return _INTEGER_VALUE[self]
+
     def is_as_new_or_better(self) -> bool:
         """Return true if the device is in mint or as-new condition."""
         return self is DeviceCondition.MINT or self is DeviceCondition.AS_NEW
 
     def __lt__(self, rhs: DeviceCondition) -> bool:
-        lhs_value = _INTEGER_VALUE[self]
-        rhs_value = _INTEGER_VALUE[rhs]
+        lhs_value = self.to_int()
+        rhs_value = rhs.to_int
         return lhs_value < rhs_value
 
 
