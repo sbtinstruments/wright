@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import anyio
 from anyio.abc import TaskGroup
 
-from ._base import _ConsoleBase
+from ._console_base import ConsoleBase
+from ._enter_context import enter_context
 from ._uboot import Uboot
 
 if TYPE_CHECKING:
-    from .._green_mango import GreenMango
+    from .._device import Device
 
 
-class Linux(_ConsoleBase):
+class Linux(ConsoleBase):
     """The default linux distribution on the device."""
 
-    def __init__(self, device: "GreenMango", tg: TaskGroup) -> None:
+    def __init__(self, device: "Device", tg: TaskGroup) -> None:
         communication = device.link.communication
         prompt = f"\r\n\x1b[1;34mroot@{communication.hostname}\x1b[m$ "
         super().__init__(
@@ -67,5 +68,5 @@ class QuietLinux(Linux):
     async def _on_enter_pre_prompt(self) -> None:
         # Enter U-boot first so that we can set some boot flags for Linux to make
         # it quiet.
-        async with Uboot.enter_context(self._dev) as uboot:
+        async with enter_context(Uboot, self._dev) as uboot:
             await uboot.boot_to_quiet_linux()

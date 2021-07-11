@@ -1,20 +1,20 @@
 from __future__ import annotations
 
+from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from logging import Logger, getLogger
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from ..config import create_config_image
 from ..config.branding import Branding
-from ..device import DeviceDescription
-from ..device.green_mango import recipes
+from ..device import Device, DeviceCondition, DeviceDescription, recipes
 from ..progress import Idle, ProgressManager, StatusMap, StatusStream
-from ..swupdate import SwuFiles, UpdateBundle
+from ..swupdate import MultiBundle
 from ..util import TEMP_DIR
+from ._power_off_on_error import power_off_on_error
 from ._settings import ResetDeviceSettings
 from ._step import run_step
-from ._with_device import with_device
 
 _LOGGER = getLogger(__name__)
 
@@ -31,8 +31,8 @@ RESET_DEVICE_STATUS_MAP: StatusMap = {
 
 
 async def reset_device(
-    desc: DeviceDescription,
-    swu: Path,
+    device_or_desc: Union[Device, DeviceDescription],
+    bundle_or_swu: Union[MultiBundle, Path],
     branding: Branding,
     *,
     settings: Optional[ResetDeviceSettings] = None,
@@ -51,22 +51,33 @@ async def reset_device(
     progress_manager = ProgressManager(
         RESET_DEVICE_STATUS_MAP, status_stream=progress_stream
     )
-    async with progress_manager:
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(progress_manager)
+
+        # Device and it's description
+        if isinstance(device_or_desc, DeviceDescription):
+            device = Device.from_description(device_or_desc, logger=logger)
+            await stack.enter_async_context(device)
+        else:
+            device = device_or_desc
+        description = device.description()
+
         # Prepare
-        bundle, config_image = await run_step(
+        multi_bundle, config_image = await run_step(
             _prepare,
-            desc,
-            swu,
+            description,
+            bundle_or_swu,
             branding,
             logger,  # This logger goes into `_prepare`
             progress_manager=progress_manager,
             logger=logger,  # This logger goes into `run_step`
         )
+        device_bundle = multi_bundle.device_bundles[description.device_type]
 
         # Reset firmware
         await run_step(
-            with_device(recipes.reset_firmware, device_description=desc, logger=logger),
-            bundle.firmware,
+            power_off_on_error(recipes.reset_firmware, device),
+            device_bundle.firmware,
             progress_manager=progress_manager,
             logger=logger,
             settings=settings.reset_firmware,
@@ -74,8 +85,8 @@ async def reset_device(
 
         # Reset software
         await run_step(
-            with_device(recipes.reset_software, device_description=desc, logger=logger),
-            bundle.software,
+            power_off_on_error(recipes.reset_software, device),
+            device_bundle.software,
             progress_manager=progress_manager,
             logger=logger,
             settings=settings.reset_software,
@@ -83,7 +94,7 @@ async def reset_device(
 
         # Reset config
         await run_step(
-            with_device(recipes.reset_config, device_description=desc, logger=logger),
+            power_off_on_error(recipes.reset_config, device),
             config_image,
             progress_manager=progress_manager,
             logger=logger,
@@ -92,10 +103,16 @@ async def reset_device(
 
         # Reset data
         await run_step(
-            with_device(recipes.reset_data, device_description=desc, logger=logger),
+            power_off_on_error(recipes.reset_data, device),
             progress_manager=progress_manager,
             logger=logger,
             settings=settings.reset_data,
+        )
+
+        # Update metadata to reflect the changes
+        device.metadata = device.metadata.update(
+            condition=DeviceCondition.MINT,
+            bundle_checksum=multi_bundle.checksum,
         )
 
     # TODO: Move this into the progress manager or similar
@@ -106,14 +123,18 @@ async def reset_device(
 
 async def _prepare(
     desc: DeviceDescription,
-    swu: Path,
+    bundle_or_swu: Union[MultiBundle, Path],
     branding: Branding,
     logger: Logger,
-) -> tuple[UpdateBundle, Path]:
-    # Extract files from SWU
-    logger.info("Extract files from SWU")
-    swu_files = await SwuFiles.from_swu(swu, TEMP_DIR, logger=logger.getChild("swu"))
-    bundle = swu_files.devices[desc.device_type]
+) -> tuple[MultiBundle, Path]:
+    if isinstance(bundle_or_swu, Path):
+        # Extract files from SWU
+        logger.info("Extract files from SWU")
+        multi_bundle = await MultiBundle.from_swu(
+            bundle_or_swu, logger=logger.getChild("swu")
+        )
+    else:
+        multi_bundle = bundle_or_swu
     # Create config image
     logger.info("Create config image")
     config_image = TEMP_DIR / "config.img"
@@ -124,4 +145,4 @@ async def _prepare(
         hostname=desc.link.communication.hostname,
         logger=logger.getChild("config"),
     )
-    return bundle, config_image
+    return multi_bundle, config_image

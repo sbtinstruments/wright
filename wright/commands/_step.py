@@ -123,5 +123,5 @@ async def retry(
                 )
 
 
-def _get_step_name(coro: StepCoro) -> str:
+def _get_step_name(coro: StepCoro[ReturnType]) -> str:
     return coro.__name__.strip("_")

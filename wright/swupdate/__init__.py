@@ -1,1 +1,1 @@
-from ._swupdate import extract_swu, SwuFiles, UpdateBundle
+from ._swupdate import DeviceBundle, MultiBundle, extract_swu

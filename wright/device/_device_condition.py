@@ -25,14 +25,11 @@ class DeviceCondition(Enum):
         """Return the integer value of this condition."""
         return _INTEGER_VALUE[self]
 
-    def is_as_new_or_better(self) -> bool:
-        """Return true if the device is in mint or as-new condition."""
-        return self is DeviceCondition.MINT or self is DeviceCondition.AS_NEW
-
     def __lt__(self, rhs: DeviceCondition) -> bool:
-        lhs_value = self.to_int()
-        rhs_value = rhs.to_int
-        return lhs_value < rhs_value
+        return self.to_int() < rhs.to_int()
+
+    def __le__(self, rhs: DeviceCondition) -> bool:
+        return self.to_int() <= rhs.to_int()
 
 
 _INTEGER_VALUE = {

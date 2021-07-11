@@ -1,7 +1,7 @@
 import logging
 
 
-def set_logging_defaults():
+def set_logging_defaults() -> None:
     """Set global settings for logging."""
     # Log everything per default
     logging.basicConfig(level=logging.DEBUG)

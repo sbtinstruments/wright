@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from logging import Logger, getLogger
-from typing import AsyncContextManager, Optional
+from typing import Any, AsyncContextManager, ContextManager, Optional
 
-from ._device_description import DeviceLink
+from ._device_description import DeviceDescription
+from ._device_link import DeviceLink
+from ._device_metadata import DeviceMetadata
+from ._device_registry import get_device
+from ._device_type import DeviceType
+from .control.boot_mode import BootMode
 
 _LOGGER = getLogger(__name__)
 
@@ -12,8 +17,24 @@ _LOGGER = getLogger(__name__)
 class Device(AsyncContextManager["Device"]):
     """Base class for a device connected to the host."""
 
-    def __init__(self, link: DeviceLink, *, logger: Optional[Logger] = None):
+    def __init__(
+        self,
+        link: DeviceLink,
+        metadata: Optional[DeviceMetadata] = None,
+        *,
+        logger: Optional[Logger] = None,
+    ):
+        # Defaults
+        if metadata is None:
+            metadata = DeviceMetadata()
         self._link = link
+        # It's not the responsibility of this class to keep track of the metadata. It's
+        # up to the user to manage the metadata. E.g., the current execution context
+        # We simply provde the `metadata` variable as a convenience to help the user
+        # keep track.
+        # This class does, however, does somtime change the metadata for convenience.
+        # E.g., to set the `execution_context` to `None` on power off.
+        self.metadata = metadata
         self._logger = logger if logger is not None else _LOGGER
 
     @property
@@ -35,9 +56,36 @@ class Device(AsyncContextManager["Device"]):
     @abstractmethod
     async def hard_power_off(self) -> None:
         """Turn this device off via a hard power cut."""
-        ...
+        # Clear the execution context
+        self.metadata = self.metadata.update(execution_context=None)
 
     @abstractmethod
     def _power_on(self) -> None:
         """Turn this device on."""
         ...
+
+    @abstractmethod
+    def scoped_boot_mode(self, value: BootMode) -> ContextManager[None]:
+        """Switch to the given boot mode while in the context manager."""
+        ...
+
+    def description(self) -> DeviceDescription:
+        """Return description of this device."""
+        device_type_name = type(self).__name__.lower()
+        try:
+            device_type = next(dt for dt in DeviceType if dt.value == device_type_name)
+        except StopIteration as exc:
+            raise RuntimeError(f'Unknown device type: "{device_type_name}"') from exc
+        return DeviceDescription(
+            device_type=device_type, link=self.link, metadata=self.metadata
+        )
+
+    @staticmethod
+    def from_description(description: DeviceDescription, **kwargs: Any) -> Device:
+        """Return device instance based on the description."""
+        device_cls = get_device(description.device_type.value)
+        if device_cls is None:
+            raise ValueError(
+                f'No device registered for type: "{description.device_type}"'
+            )
+        return device_cls(description.link, description.metadata, **kwargs)

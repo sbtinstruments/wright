@@ -52,7 +52,7 @@ class Console:
             inf, str
         )  # [1]
         # TODO: Submit a pull request to anyio that adds types to `anyio.Lock`.
-        self._serial_lock = anyio.Lock()  # type: ignore[no-untyped-call]
+        self._serial_lock = anyio.Lock()
 
     @classmethod
     @asynccontextmanager

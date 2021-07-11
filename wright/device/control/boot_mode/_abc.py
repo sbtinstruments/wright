@@ -33,7 +33,7 @@ class AbstractBootModeControl(AbstractContextManager["AbstractBootModeControl"])
 
     @contextmanager
     def scoped(self, value: BootMode) -> Iterator[None]:
-        """Switch to the given boot mode while in context manager."""
+        """Switch to the given boot mode while in the context manager."""
         previous_mode = self.get_mode()
         try:
             self.set_mode(value)

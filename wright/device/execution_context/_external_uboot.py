@@ -8,16 +8,16 @@ from typing import TYPE_CHECKING, Optional
 import anyio
 from anyio.abc import TaskGroup
 
-from .... import openocd as ocd
-from ....subprocess import run_process
-from ....util import TEMP_DIR
-from ... import assets
-from ..._device_description import DeviceCommunication
-from ...control.boot_mode import BootMode
+from ... import openocd as ocd
+from ...subprocess import run_process
+from ...util import TEMP_DIR
+from .. import assets
+from ..control.boot_mode import BootMode
 from ._uboot import Uboot
 
 if TYPE_CHECKING:
-    from .._green_mango import GreenMango
+    from .._device import Device
+    from .._device_description import DeviceCommunication
 
 _CFG_FILE = TEMP_DIR / "green_mango.cfg"
 _FSBL_FILE = TEMP_DIR / "fsbl.elf"
@@ -31,13 +31,13 @@ class ExternalUboot(Uboot):
     contrast to `Uboot`).
     """
 
-    def __init__(self, device: "GreenMango", tg: TaskGroup) -> None:
+    def __init__(self, device: "Device", tg: TaskGroup) -> None:
         # The built-in U-boot is based on the "bactobox" defconfig. Therefore,
         # the hostname is "bactobox". It works fine on, e.g., a Zeus device as
         # well.
         # TODO: Change hostname of built-in U-boot to something generic like
         # "green mango".
-        prompt = f"\r\nbactobox> "
+        prompt = "\r\nbactobox> "
         super().__init__(device, tg, prompt=prompt)
 
     async def _on_enter_pre_prompt(self) -> None:
@@ -50,7 +50,7 @@ class ExternalUboot(Uboot):
         await jtag_boot_to_uboot(self._dev)
 
 
-async def jtag_boot_to_uboot(device: "GreenMango") -> None:
+async def jtag_boot_to_uboot(device: "Device") -> None:
     """Boot directly to U-boot via JTAG."""
     _extract_files(logger=device.logger)
 
@@ -67,8 +67,8 @@ async def jtag_boot_to_uboot(device: "GreenMango") -> None:
             # Cycle power to USB ports
             await _power_cycle_usb_ports(logger=device.logger.getChild("usb"))
             # Try to start the server once more.
-            # TODO: Somehow add the time that it takes to do this "unexpected" extra step
-            # to the overall timeout.
+            # TODO: Somehow add the time that it takes to do this "unexpected" extra
+            # step to the overall timeout.
             device.logger.info("Start the OpenOCD server once more.")
             await _start_server(stack, device.link.communication, logger=device.logger)
 
@@ -118,7 +118,7 @@ def _extract_files(*, logger: Logger) -> None:
 
 
 async def _start_server(
-    stack: AsyncExitStack, communication: DeviceCommunication, *, logger: Logger
+    stack: AsyncExitStack, communication: "DeviceCommunication", *, logger: Logger
 ) -> None:
     # Commands that we run when the server runs
     commands: list[str] = []

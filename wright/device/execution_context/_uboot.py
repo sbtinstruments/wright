@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING, Optional
 from anyio.abc import TaskGroup
 from anyio.lowlevel import checkpoint
 
-from ....tftp import AsyncTFTPServer
-from ....util import TEMP_DIR, get_local_ip, split_file
-from ._base import _ConsoleBase
+from ...tftp import AsyncTFTPServer
+from ...util import TEMP_DIR, get_local_ip, split_file
+from ._console_base import ConsoleBase
 
 if TYPE_CHECKING:
-    from .._green_mango import GreenMango
+    from .._device import Device
 
 
 @dataclass(frozen=True)
@@ -34,12 +34,12 @@ class Mmc:
     config: MmcPartition = MmcPartition(0x96022, 0x32000)
 
 
-class Uboot(_ConsoleBase):
+class Uboot(ConsoleBase):
     """On-device U-boot installation."""
 
     def __init__(
         self,
-        device: "GreenMango",
+        device: "Device",
         tg: TaskGroup,
         *,
         prompt: Optional[str] = None,
