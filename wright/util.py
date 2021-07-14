@@ -50,13 +50,13 @@ def split_file(file_path: Path, *, chunk_size: Optional[int] = None) -> List[Fil
     # The sentinel is a series of null bytes. When we reach the
     # sentinel while reading the file, we start skipping.
     sentinel = bytes(chunk_size)
-    with file_path.open("rb") as file:
+    with file_path.open("rb") as io:
         done = False
         while not done:
             part_data = bytes()
-            offset = file.tell()
+            offset = io.tell()
             # Read until we reach the sentinel or there is no more data
-            while chunk := file.read(chunk_size):
+            while chunk := io.read(chunk_size):
                 if chunk == sentinel:
                     break
                 part_data += chunk
@@ -68,8 +68,8 @@ def split_file(file_path: Path, *, chunk_size: Optional[int] = None) -> List[Fil
                 continue
             # Otherwise, we write the data out to as a file.
             part_path = TEMP_DIR / f"{file_path.name}__offset_{offset}.bin"
-            with part_path.open("wb") as part_file:
-                part_file.write(part_data)
+            with part_path.open("wb") as part_io:
+                part_io.write(part_data)
             result.append(FilePart(part_path, offset))
     return result
 

@@ -35,12 +35,19 @@ class Device(AsyncContextManager["Device"]):
         # This class does, however, does somtime change the metadata for convenience.
         # E.g., to set the `execution_context` to `None` on power off.
         self.metadata = metadata
+        # Automatically determine the device type
+        self._device_type = _get_device_type(self)
         self._logger = logger if logger is not None else _LOGGER
 
     @property
     def link(self) -> DeviceLink:
         """Return the means by which the host connects to this device."""
         return self._link
+
+    @property
+    def device_type(self) -> DeviceType:
+        """Return the device type."""
+        return self._device_type
 
     @property
     def logger(self) -> Logger:
@@ -71,13 +78,8 @@ class Device(AsyncContextManager["Device"]):
 
     def description(self) -> DeviceDescription:
         """Return description of this device."""
-        device_type_name = type(self).__name__.lower()
-        try:
-            device_type = next(dt for dt in DeviceType if dt.value == device_type_name)
-        except StopIteration as exc:
-            raise RuntimeError(f'Unknown device type: "{device_type_name}"') from exc
         return DeviceDescription(
-            device_type=device_type, link=self.link, metadata=self.metadata
+            device_type=self.device_type, link=self.link, metadata=self.metadata
         )
 
     @staticmethod
@@ -89,3 +91,11 @@ class Device(AsyncContextManager["Device"]):
                 f'No device registered for type: "{description.device_type}"'
             )
         return device_cls(description.link, description.metadata, **kwargs)
+
+
+def _get_device_type(device: Device) -> DeviceType:
+    device_type_name = type(device).__name__.lower()
+    try:
+        return next(dt for dt in DeviceType if dt.value == device_type_name)
+    except StopIteration as exc:
+        raise RuntimeError(f'Unknown device type: "{device_type_name}"') from exc

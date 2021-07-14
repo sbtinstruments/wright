@@ -15,8 +15,8 @@ def create_layout() -> list[Any]:
     sg.theme("SystemDefaultForReal")
 
     try:
-        with CONFIG.open("r") as config_file:
-            defaults = json.load(config_file)
+        with CONFIG.open("r") as io:
+            defaults = json.load(io)
     except OSError:
         defaults = {}
 

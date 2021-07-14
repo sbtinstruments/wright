@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from logging import Logger
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from zlib import crc32
 
-from ..device import DeviceType
+import libconf
+
+from ..model import FrozenModel
 from ..subprocess import run_process
 from ..util import TEMP_DIR
 
@@ -14,20 +15,26 @@ _CPIO_EXE = "cpio"
 _CHECKSUM_FILE_NAME = "swu-checksum"
 
 
-@dataclass(frozen=True)
-class DeviceBundle:
+class DiskImage(FrozenModel):
+    """Image file and version used in a software update."""
+
+    file: Path
+    version: str
+
+
+class DeviceBundle(FrozenModel):
     """Combination of firmware and software update for a specific device."""
 
-    firmware: Path
-    software: Path
+    firmware: DiskImage
+    software: DiskImage
 
 
-@dataclass(frozen=True)
-class MultiBundle:
+class MultiBundle(FrozenModel):
     """Collection of device-specific update bundles."""
 
     checksum: str
-    device_bundles: dict[DeviceType, DeviceBundle]
+    # Mapping of device type (given as a string) to device bundle
+    device_bundles: dict[str, DeviceBundle]
 
     @classmethod
     async def from_swu(
@@ -52,26 +59,17 @@ class MultiBundle:
         swu_fingerprint = hex(abs(hash(swu_stat)))[2:]
         swu_dir = dest_dir / f"{swu.name}__{swu_fingerprint}"
         checksum_file = swu_dir / _CHECKSUM_FILE_NAME
+        sw_description_file = swu_dir / "sw-description"
         # Skip the extraction process if the fingerprint matches an
         # existing record.
         if not swu_dir.exists():
             await extract_swu(swu, swu_dir, logger=logger)
             store_checksum(swu, checksum_file)
+        # Get device bundles
+        device_bundles = get_device_bundles(sw_description_file)
         # Get checksum
         checksum = checksum_file.read_text()
-        return cls(
-            checksum,
-            {
-                DeviceType.BACTOBOX: DeviceBundle(
-                    swu_dir / "bactobox-boot-with-u-boot-env.bin",
-                    swu_dir / "bactobox-system.img",
-                ),
-                DeviceType.ZEUS: DeviceBundle(
-                    swu_dir / "zeus-boot-with-u-boot-env.bin",
-                    swu_dir / "zeus-system.img",
-                ),
-            },
-        )
+        return cls(checksum=checksum, device_bundles=device_bundles)
 
 
 async def extract_swu(
@@ -83,6 +81,40 @@ async def extract_swu(
     await run_process(
         command, stdin_file=swu, stdout_logger=logger, cwd=dest_dir.absolute()
     )
+
+
+def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
+    """Get firmware and software versions from the description file."""
+    swu_dir = sw_description_file.parent
+    # Load in the libconfig-encoded description file
+    with sw_description_file.open("rt") as io:
+        sw_description = libconf.load(io)
+    # Extract device bundles from the description
+    software = sw_description["software"]
+    # Get all device descriptions. This filters out the top-level entries such as
+    # "version" and "description". All there is left is something like:
+    #
+    #   {"zeus": {...}, "bactobox": {...}}
+    device_descriptions: dict[str, dict[str, Any]] = {
+        device_type: description
+        for device_type, description in software.items()
+        if "images" in description
+    }
+    # Convert from the description structure to our own bundle structure
+    raw_device_bundles: dict[str, dict[str, DiskImage]] = {
+        device_type: {
+            image["name"]: DiskImage(
+                file=swu_dir / image["filename"], version=image["version"]
+            )
+            for image in description["images"]
+        }
+        for device_type, description in device_descriptions.items()
+    }
+    # Finally, convert the raw dicts into `DeviceBundle` instances
+    return {
+        device_type: DeviceBundle(**raw_device_bundle)
+        for device_type, raw_device_bundle in raw_device_bundles.items()
+    }
 
 
 def store_checksum(swu: Path, checksum_file: Path) -> None:

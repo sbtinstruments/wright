@@ -38,9 +38,7 @@ class CommandLog(ContextManager["CommandLog"]):
         """Return a copy of all rows in this log."""
         return tuple(self._rows)
 
-    def contains(
-        self, *, status: CommandStatus, hostname: str
-    ) -> bool:
+    def contains(self, *, status: CommandStatus, hostname: str) -> bool:
         """Does this log contain the given hostname and status."""
         return any(
             row.hostname == hostname and row.status is status for row in self._rows
@@ -56,14 +54,14 @@ class CommandLog(ContextManager["CommandLog"]):
         self._serialize()
 
     def _serialize(self) -> None:
-        with self._log_file.open("w", newline="") as f:
-            writer = csv.writer(f)
+        with self._log_file.open("w", newline="") as io:
+            writer = csv.writer(io)
             for row in self._rows:
                 writer.writerow(("reset_device", row.status.name, row.hostname))
 
     def _deserialize(self) -> None:
-        with self._log_file.open() as f:
-            reader = csv.reader(f)
+        with self._log_file.open() as io:
+            reader = csv.reader(io)
             for raw_row in reader:
                 name = raw_row[0]
                 status = CommandStatus[raw_row[1]]

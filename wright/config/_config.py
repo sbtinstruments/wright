@@ -95,8 +95,8 @@ def create_file(path: Path, contents: Union[str, bytes]) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = "w" if isinstance(contents, str) else "wb"
-    with path.open(mode) as file:
-        file.write(contents)
+    with path.open(mode) as io:
+        io.write(contents)
 
 
 def create_ssh_key_pair(destination_dir: Path) -> None:
@@ -106,16 +106,16 @@ def create_ssh_key_pair(destination_dir: Path) -> None:
     base_name = "ssh_host_ed25519_key"
 
     destination_dir.mkdir(parents=True, exist_ok=True)
-    with (destination_dir / base_name).open("wb") as file:
-        file.write(
+    with (destination_dir / base_name).open("wb") as io:
+        io.write(
             private_key.private_bytes(
                 crypto_serialization.Encoding.PEM,
                 crypto_serialization.PrivateFormat.OpenSSH,
                 crypto_serialization.NoEncryption(),
             )
         )
-    with (destination_dir / f"{base_name}.pub").open("wb") as file:
-        file.write(
+    with (destination_dir / f"{base_name}.pub").open("wb") as io:
+        io.write(
             public_key.public_bytes(
                 crypto_serialization.Encoding.OpenSSH,
                 crypto_serialization.PublicFormat.OpenSSH,

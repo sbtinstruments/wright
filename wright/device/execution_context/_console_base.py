@@ -45,7 +45,7 @@ class ConsoleBase(Base):
         self._enter_force_prompt_delay = enter_force_prompt_delay
         self._stack: Optional[AsyncExitStack] = None
 
-    async def cmd(self, *args: Any, **kwargs: Any) -> Any:
+    async def cmd(self, *args: Any, **kwargs: Any) -> Optional[str]:
         """Send command through the console."""
         self._raise_if_not_entered()
         self._raise_if_exited()

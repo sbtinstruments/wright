@@ -8,7 +8,7 @@ from typing import Optional, Union
 
 from ..config import create_config_image
 from ..config.branding import Branding
-from ..device import Device, DeviceCondition, DeviceDescription, recipes
+from ..device import Device, DeviceCondition, DeviceDescription, DeviceType, recipes
 from ..progress import Idle, ProgressManager, StatusMap, StatusStream
 from ..swupdate import MultiBundle
 from ..util import TEMP_DIR
@@ -60,24 +60,24 @@ async def reset_device(
             await stack.enter_async_context(device)
         else:
             device = device_or_desc
-        description = device.description()
 
         # Prepare
         multi_bundle, config_image = await run_step(
             _prepare,
-            description,
+            device.device_type,
+            device.link.communication.hostname,
             bundle_or_swu,
             branding,
             logger,  # This logger goes into `_prepare`
             progress_manager=progress_manager,
             logger=logger,  # This logger goes into `run_step`
         )
-        device_bundle = multi_bundle.device_bundles[description.device_type]
+        device_bundle = multi_bundle.device_bundles[device.device_type.value]
 
         # Reset firmware
         await run_step(
             power_off_on_error(recipes.reset_firmware, device),
-            device_bundle.firmware,
+            device_bundle.firmware.file,
             progress_manager=progress_manager,
             logger=logger,
             settings=settings.reset_firmware,
@@ -86,7 +86,7 @@ async def reset_device(
         # Reset software
         await run_step(
             power_off_on_error(recipes.reset_software, device),
-            device_bundle.software,
+            device_bundle.software.file,
             progress_manager=progress_manager,
             logger=logger,
             settings=settings.reset_software,
@@ -111,8 +111,9 @@ async def reset_device(
 
         # Update metadata to reflect the changes
         device.metadata = device.metadata.update(
+            bundle=multi_bundle,
+            branding=branding,
             condition=DeviceCondition.MINT,
-            bundle_checksum=multi_bundle.checksum,
         )
 
     # TODO: Move this into the progress manager or similar
@@ -122,7 +123,8 @@ async def reset_device(
 
 
 async def _prepare(
-    desc: DeviceDescription,
+    device_type: DeviceType,
+    hostname: str,
     bundle_or_swu: Union[MultiBundle, Path],
     branding: Branding,
     logger: Logger,
@@ -140,9 +142,9 @@ async def _prepare(
     config_image = TEMP_DIR / "config.img"
     await create_config_image(
         config_image,
-        device_type=desc.device_type,
+        device_type=device_type,
         branding=branding,
-        hostname=desc.link.communication.hostname,
+        hostname=hostname,
         logger=logger.getChild("config"),
     )
     return multi_bundle, config_image
