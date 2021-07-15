@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING
 import anyio
 from anyio.abc import TaskGroup
 
+from .._device_condition import DeviceCondition
 from ._console_base import ConsoleBase
+from ._deteriorate import deteriorate
 from ._enter_context import enter_context
 from ._uboot import Uboot
 
@@ -24,11 +26,13 @@ class Linux(ConsoleBase):
             device, tg, prompt, force_prompt_timeout=90, enter_force_prompt_delay=50
         )
 
+    @deteriorate(DeviceCondition.USED)
     async def reset_data(self) -> None:
         """Remove all data on this device."""
         await self.stop_services_that_use_data_partition()
         await self.format_data_partition()
 
+    @deteriorate(DeviceCondition.AS_NEW)
     async def stop_services_that_use_data_partition(self) -> None:
         """Stop all services that may use the data partition."""
         self.logger.info("Stop all services that may use the data partition")
@@ -45,6 +49,7 @@ class Linux(ConsoleBase):
         await self.cmd("/etc/init.d/S70swupdate stop")
         await self.cmd("/etc/init.d/S01rsyslogd stop")
 
+    @deteriorate(DeviceCondition.USED)
     async def format_data_partition(self) -> None:
         """Format the data partition.
 
@@ -56,12 +61,14 @@ class Linux(ConsoleBase):
         await self.cmd("umount /media/data", check_error_code=False)
         await self.cmd("yes | mkfs.ext4 -L data /dev/mmcblk0p4")
 
+    @deteriorate(DeviceCondition.AS_NEW)
     async def get_date(self) -> datetime:
         """Return the device date."""
         date_str = await self.cmd("date +%s")
         assert date_str is not None
         return datetime.utcfromtimestamp(int(date_str))
 
+    @deteriorate(DeviceCondition.AS_NEW)
     async def get_versions(self) -> dict[str, str]:
         """Return the versions of all installed firmware, software, etc."""
         raw_versions = await self.cmd("cat /etc/sw-versions")

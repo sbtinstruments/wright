@@ -123,7 +123,14 @@ async def _start_server(
     # Commands that we run when the server runs
     commands: list[str] = []
     if communication.jtag_usb_serial is not None:
+        logger.info(
+            f'Use the FTDI device with serial number: "{communication.jtag_usb_serial}"'
+        )
         commands.append(f"ftdi_serial {communication.jtag_usb_serial}")
+    else:
+        logger.info(
+            "Use an arbitrary FTDI device (no specific serial number specified)"
+        )
     # Run the server
     ocd_server = ocd.run_server_in_background(
         _CFG_FILE, commands, logger=logger.getChild("ocd.server")

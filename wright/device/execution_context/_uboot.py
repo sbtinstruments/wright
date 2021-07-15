@@ -9,7 +9,9 @@ from anyio.lowlevel import checkpoint
 
 from ...tftp import AsyncTFTPServer
 from ...util import TEMP_DIR, get_local_ip, split_file
+from .._device_condition import DeviceCondition
 from ._console_base import ConsoleBase
+from ._deteriorate import deteriorate
 
 if TYPE_CHECKING:
     from .._device import Device
@@ -59,12 +61,14 @@ class Uboot(ConsoleBase):
         self._tftp_host = get_local_ip()
         self._tftp_port = 6969
 
+    @deteriorate(DeviceCondition.USED)
     async def write_image_to_mmc(self, file: Path, *partitions: MmcPartition) -> None:
         """Write file system image from host to device's MMC."""
         await self.copy_to_memory(file)
         for partition in partitions:
             await self.write_memory_to_mmc(partition)
 
+    @deteriorate(DeviceCondition.USED)
     async def partition_mmc(self) -> None:
         """Partition the device's MMC memory."""
         self.logger.info("Partition MMC memory")
@@ -81,6 +85,7 @@ class Uboot(ConsoleBase):
         # this context.
         await self.aclose()
 
+    @deteriorate(DeviceCondition.USED)
     async def write_memory_to_mmc(
         self, partition: MmcPartition, *, memory_address: Optional[int] = None
     ) -> None:
@@ -98,6 +103,7 @@ class Uboot(ConsoleBase):
             f"{hex(partition.length)}"
         )
 
+    @deteriorate(DeviceCondition.USED)
     async def write_image_to_flash(self, file: Path) -> None:
         """Write the given image file to the FLASH memory on this device.
 
@@ -115,6 +121,7 @@ class Uboot(ConsoleBase):
             length = part.path.stat().st_size
             await self.write_memory_to_flash(part.offset, length)
 
+    @deteriorate(DeviceCondition.USED)
     async def erase_flash(self) -> None:
         """Erase the flash memory on this device."""
         await self._probe_flash()
@@ -136,6 +143,7 @@ class Uboot(ConsoleBase):
         await self.cmd("sf probe")
         self._probed_flash = True
 
+    @deteriorate(DeviceCondition.USED)
     async def write_memory_to_flash(
         self, offset: int, length: int, *, memory_address: Optional[int] = None
     ) -> None:
@@ -154,6 +162,7 @@ class Uboot(ConsoleBase):
         )
         await self.cmd(f"sf write {memory_address_hex} {offset_hex} {length_hex}")
 
+    @deteriorate(DeviceCondition.AS_NEW)
     async def copy_to_memory(
         self, file: Path, *, address: Optional[int] = None
     ) -> None:
@@ -169,6 +178,7 @@ class Uboot(ConsoleBase):
         self.logger.info("Copy %s to device memory at %s", str(file), address_hex)
         await self.cmd(f"tftpboot {address_hex} {file}")
 
+    @deteriorate(DeviceCondition.AS_NEW)
     async def boot_to_quiet_linux(self) -> None:
         """Start the linux boot process with the lowest log level."""
         # Disable kernel logging as it messes with the serial output.
@@ -178,6 +188,7 @@ class Uboot(ConsoleBase):
         await self.cmd("setenv bootargs loglevel=0")
         await self.boot_to_linux()
 
+    @deteriorate(DeviceCondition.AS_NEW)
     async def boot_to_linux(self) -> None:
         """Start the linux boot process."""
         # Note that we don't use the "boot" command since it also does some PMIC

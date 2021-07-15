@@ -33,6 +33,11 @@ class Base(AsyncContextManager["Base"]):
         self._exited = False
 
     @property
+    def device(self) -> "Device":
+        """Return the device used in this instance."""
+        return self._dev
+
+    @property
     def logger(self) -> Logger:
         """Return the logger used in this instance."""
         return self._logger

@@ -38,8 +38,11 @@ class Console:
             baud_rate = 115200
         if logger is None:
             logger = _LOGGER
-        # Serial connection (opened in `__aenter__`)
-        self._serial = serial.Serial(str(tty), baud_rate)
+        # Note that we intentionally do not give the `port` argument to
+        # `Serial.__init__`. This is because the constructor opens the port if given
+        # and we want to defer that.
+        self._serial = serial.Serial(baudrate=baud_rate)
+        self._serial.port = str(tty)
         # Internals
         self._tg = tg
         self._cancel_scope = anyio.CancelScope()
@@ -169,7 +172,13 @@ class Console:
             await stack.enter_async_context(self._responses_send)
             logger_info = DelimitedBuffer(self._logger.info)
             stack.enter_context(logger_info)
+            self._logger.info("Opening serial connection")
+            # We call `Serial.open` in a worker thread since it may block the event
+            # loop otherwise. In turn, this means that `Serial.__enter__` becomes a
+            # no-op (which is what we want).
+            await anyio.to_thread.run_sync(self._serial.open)
             stack.enter_context(self._serial)
+            self._logger.info("Opened serial connection")
             task_status.started()
 
             buffer = ""
