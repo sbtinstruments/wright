@@ -47,6 +47,14 @@ class Linux(ConsoleBase):
         await self.cmd("/etc/init.d/S82telegraf stop")
         await self.cmd("/etc/init.d/S81influxdb stop")
         await self.cmd("/etc/init.d/S70swupdate stop")
+        # HACK: crond doesn't use the data partition but it causes other issues
+        # due to sudden time shifts. Therefore, we also stop crond.
+        # Specifically, a time shift during `mkfs.ext4` causes `mkfs.ext4` to
+        # not return.
+        await self.cmd("/etc/init.d/S60crond stop")
+        # We introduced nginx in SW 4.12.0. Therefore, it won't be there on older
+        # systems. Hence the conditional command.
+        await self.cmd("[ -f /etc/init.d/S50nginx ] && /etc/init.d/S50nginx stop")
         await self.cmd("/etc/init.d/S01rsyslogd stop")
 
     @deteriorate(DeviceCondition.USED)
@@ -89,6 +97,16 @@ class Linux(ConsoleBase):
         # Otherwise, we enter U-boot instead.
         await anyio.sleep(3)
 
+    async def _on_enter_post_prompt(self) -> None:
+        # HACK: Wait for services to start. In theory, this is the
+        # responsibility of the init scripts. In practice, the init
+        # scripts may return before the corresponding processes actually
+        # run.
+        # This is an issue for, e.g., the `reset_data` function because
+        # it can't stop a service that doesn't already run.
+        # If you call `reset_data` right after boot, you would get
+        # an error if not for the following `sleep`.
+        await anyio.sleep(5)
 
 class QuietLinux(Linux):
     """Linux with a quiet kernel log level."""

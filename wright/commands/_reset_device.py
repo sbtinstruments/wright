@@ -26,7 +26,7 @@ RESET_DEVICE_STATUS_MAP: StatusMap = {
     "reset_firmware": Idle(timedelta(seconds=110), 0),
     "reset_software": Idle(timedelta(seconds=70), 0),
     "reset_config": Idle(timedelta(seconds=40), 0),
-    "reset_data": Idle(timedelta(seconds=90), 0),
+    "reset_data": Idle(timedelta(seconds=100), 0),
 }
 
 

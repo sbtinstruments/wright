@@ -55,6 +55,8 @@ async def reset_data(device: Device) -> None:
     # This step is also very slow because we have to wait for the Linux distribution
     # to fully boot. All we really need to do is format an ext4 partition. There
     # must be a better way.
-    with anyio.fail_after(90):
+    # Maybe we can just raw copy an existing EXT4-formatted partition to the raw MMC.
+    # We can do that directly through U-boot (no Linux required).
+    with anyio.fail_after(100):
         async with enter_context(QuietLinux, device) as linux:
             await linux.reset_data()
