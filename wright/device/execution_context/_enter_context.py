@@ -5,12 +5,19 @@ import anyio
 
 if TYPE_CHECKING:
     from .._device import Device
-    from ._external_uboot import ExternalUboot
-    from ._linux import Linux, QuietLinux
-    from ._uboot import Uboot
+    from ._fw import DeviceUboot, Uboot, WrightLiveUboot
+    from ._os import DeviceLinux, Linux, WrightLiveLinux
 
 ExecutionContext = TypeVar(
-    "ExecutionContext", bound=Union["Uboot", "ExternalUboot", "Linux", "QuietLinux"]
+    "ExecutionContext",
+    bound=Union[
+        "Uboot",
+        "DeviceUboot",
+        "WrightLiveUboot",
+        "Linux",
+        "DeviceLinux",
+        "WrightLiveLinux",
+    ],
 )
 
 

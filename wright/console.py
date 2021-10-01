@@ -139,9 +139,9 @@ class Console:
         return resp
 
     async def _cmd(self, cmd: str, *, wait_for_prompt: bool = True) -> Optional[str]:
-        async with self._serial_lock:
-            # Add line end so that the command is executed
-            self._serial.write((cmd + "\n").encode())
+        # Note that `write_line ` adds an end-line character. In turn, this causes
+        # the device to execute the given command.
+        await self.write_line(cmd)
         # Early out
         if not wait_for_prompt:
             return None
@@ -153,6 +153,15 @@ class Console:
             raise RuntimeError("Could not send command")
         # 2, because of \r\n
         return resp[len(cmd) + 2 :]
+
+    async def write_line(self, text: str) -> None:
+        """Write to this serial console (suffixed with an end-line character).
+
+        If you want to execute a command on the device, use `cmd` instead. The latter
+        has optional error checks and result parsing.
+        """
+        async with self._serial_lock:
+            self._serial.write((text + "\n").encode())
 
     async def _run(self, task_status: TaskStatus) -> None:
         """Parse input from this serial console.

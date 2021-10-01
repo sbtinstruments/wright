@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Optional, Type, TypeVar, cast
 
 import anyio
 from anyio.abc import TaskGroup
+from anyio.lowlevel import checkpoint
 
 from ...console import Console
 from ._base import Base
@@ -23,8 +24,10 @@ class ConsoleBase(Base):
         tg: TaskGroup,
         prompt: str,
         *,
-        force_prompt_timeout: Optional[int] = None,
+        force_prompt_timeout: Optional[float] = None,
         enter_force_prompt_delay: Optional[float] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> None:
         super().__init__(device, tg)
         # Logger for the console
@@ -43,6 +46,8 @@ class ConsoleBase(Base):
         if enter_force_prompt_delay is None:
             enter_force_prompt_delay = 0
         self._enter_force_prompt_delay = enter_force_prompt_delay
+        self._username = username
+        self._password = password
         self._stack: Optional[AsyncExitStack] = None
 
     async def cmd(self, *args: Any, **kwargs: Any) -> Optional[str]:
@@ -66,6 +71,22 @@ class ConsoleBase(Base):
         assert self._stack is not None
         await self._stack.aclose()
         self._dev.metadata = self._dev.metadata.update(execution_context=None)
+
+    async def _log_in(self) -> None:
+        """Log in to the device.
+
+        Note that not all devices require this.
+        """
+        noop = True
+        if self._username is not None:
+            await self._console.write_line(self._username)
+            noop = False
+        if self._password is not None:
+            await self._console.write_line(self._password)
+            noop = False
+        # Checkpoint for the no-operation (noop) case
+        if noop:
+            await checkpoint()
 
     async def _on_enter_pre_prompt(self) -> None:
         pass
@@ -93,6 +114,7 @@ class ConsoleBase(Base):
             await stack.enter_async_context(self._console)
             if not skip_enter_steps:
                 await anyio.sleep(self._enter_force_prompt_delay)
+                await self._log_in()
             await self._force_prompt()
             # Mark as "entered" already, so that the post prompt step can
             # issue commands.

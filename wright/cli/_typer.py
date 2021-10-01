@@ -9,7 +9,8 @@ import typer
 
 from .. import commands, config
 from ..config.branding import Branding
-from ..device import DeviceDescription, DeviceType
+from ..device import Device, DeviceDescription, DeviceType
+from ..device.execution_context import WrightLiveLinux, enter_context
 from ._log_format import CliFormatter
 
 app = typer.Typer()
@@ -50,7 +51,9 @@ def reset_device(
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
     tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
     jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_SERIAL"),
-    skip_reset_firmware: bool = typer.Option(False, envvar="WRIGHT_SKIP_RESET_FIRMWARE"),
+    skip_reset_firmware: bool = typer.Option(
+        False, envvar="WRIGHT_SKIP_RESET_FIRMWARE"
+    ),
 ) -> None:
     """Reset device to mint condition."""
     # Device description (translate CLI args)
@@ -74,6 +77,32 @@ def reset_device(
         logger=_LOGGER,
     )
     anyio.run(command)
+
+
+@app.command()
+def cmd(
+    cmd: str,
+    *,
+    device_type: DeviceType = typer.Option(..., envvar="WRIGHT_DEVICE_TYPE"),
+    hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
+    tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
+    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_SERIAL"),
+) -> None:
+    """Execute the given command in Wright Linux."""
+    # Device description (translate CLI args)
+    description = DeviceDescription.from_raw_args(
+        device_type=device_type,
+        hostname=hostname,
+        tty=tty,
+        jtag_usb_serial=jtag_usb_serial,
+    )
+    device = Device.from_description(description)
+
+    async def _boot() -> None:
+        async with device, enter_context(WrightLiveLinux, device) as linux:
+            await linux.cmd(cmd)
+
+    anyio.run(_boot)
 
 
 @app.command()
