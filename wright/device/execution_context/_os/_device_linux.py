@@ -89,19 +89,16 @@ class DeviceLinux(Linux):
         # We assume that the device uses U-boot and sbtOS. This way, we know how to
         # enter Linux.
 
-        if self._kernel_log_level is not None:
-            # Enter U-boot first so that we can set the "log level" boot flags for
-            # Linux
-            async with enter_context(DeviceUboot, self._dev) as uboot:
+        # Enter U-boot first so that we can interrupt the usual boot procedure.
+        # Otherwise, U-boot power offs early with the message:
+        #
+        #  > PMIC woke due to "charging" event'
+        #
+        # on battery-powered devices like Zeus.
+        #
+        # We need to set the boot flags for Linux (e.g., "log level") from within
+        # U-boot anyhow.
+        async with enter_context(DeviceUboot, self._dev) as uboot:
+            if self._kernel_log_level is not None:
                 await uboot.set_boot_args(loglevel="0")
-                await uboot.boot_to_device_os()
-        else:
-            # We don't need any special boot flags. Therefore, we can enter Linux
-            # directly.
-            # First, restart the device
-            await self._dev.hard_restart()
-            # Second, wait a moment before we spam the serial line in search of the
-            # prompt. Otherwise, we enter U-boot instead.
-            await anyio.sleep(3)
-            # Third, U-boot automatically boots into Linux for us. We don't have to
-            # do anything.
+            await uboot.boot_to_device_os()

@@ -87,6 +87,8 @@ def cmd(
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
     tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
     jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_SERIAL"),
+    power_relay: Optional[int] = typer.Option(None, envvar="WRIGHT_POWER_RELAY"),
+    boot_mode_gpio: Optional[int] = typer.Option(None, envvar="WRIGHT_BOOT_MODE_GPIO"),
 ) -> None:
     """Execute the given command in Wright Linux."""
     # Device description (translate CLI args)
@@ -95,6 +97,8 @@ def cmd(
         hostname=hostname,
         tty=tty,
         jtag_usb_serial=jtag_usb_serial,
+        power_relay=power_relay,
+        boot_mode_gpio=boot_mode_gpio,
     )
     device = Device.from_description(description)
 

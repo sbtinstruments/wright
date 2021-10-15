@@ -11,6 +11,8 @@ from ._device_metadata import DeviceMetadata
 from ._device_type import DeviceType
 from ._validation import raise_if_bad_hostname
 from .control import DeviceControl
+from .control.boot_mode import GpioBootModeControl
+from .control.power import RelayPowerControl
 
 
 class DeviceDescription(FrozenModel):
@@ -42,13 +44,20 @@ class DeviceDescription(FrozenModel):
         hostname: str,
         tty: Optional[Path] = None,
         jtag_usb_serial: Optional[str] = None,
+        power_relay: Optional[int] = None,
+        boot_mode_gpio: Optional[int] = None,
     ) -> DeviceDescription:
         """Return instance created from the given args.
 
         This is a convenience function that forwards the args to the
         constructors of the model hierarchy.
         """
-        control = DeviceControl()
+        control_args: dict[str, Any] = {}
+        if power_relay is not None:
+            control_args["power"] = RelayPowerControl(relay_id=power_relay)
+        if boot_mode_gpio is not None:
+            control_args["boot_mode"] = GpioBootModeControl(gpio_id=boot_mode_gpio)
+        control = DeviceControl(**control_args)
         communication = DeviceCommunication(
             hostname=hostname,
             tty=tty,
