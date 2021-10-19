@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 
+import anyio
 from anyio.abc import TaskGroup
 
+from ....command_line import SerialCommandLine
 from ..._device_condition import DeviceCondition
 from .._deteriorate import deteriorate
 from ._mmc import Mmc
@@ -21,18 +24,8 @@ class DeviceUboot(Uboot):
     execution context.
     """
 
-    def __init__(
-        self,
-        device: "Device",
-        tg: TaskGroup,
-        prompt: Optional[str] = None,
-        **kwargs: Any,
-    ) -> None:
-        # Default arguments
-        if prompt is None:
-            # E.g. "bactobox>" or "zeus>" with some whitespace chars
-            prompt = f"\r\n{type(device).__name__.lower()}> "
-        super().__init__(device, tg, prompt, **kwargs)
+    def __init__(self, device: "Device", tg: TaskGroup) -> None:
+        super().__init__(device, tg)
         self._mmc = Mmc()
 
     @property
@@ -56,3 +49,16 @@ class DeviceUboot(Uboot):
         # We need to restart the entire device. Therefore, we close
         # this context.
         await self.aclose()
+
+    async def _boot(self) -> None:
+        await self.device.hard_restart()
+
+    @asynccontextmanager
+    async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
+        # E.g. "bactobox>" or "zeus>" with some whitespace chars
+        prompt = f"\r\n{type(self.device).__name__.lower()}> "
+        async with self._create_serial(prompt) as serial:
+            # Spam 'echo' commands until the serial prompt appears
+            with anyio.fail_after(5):
+                await serial.force_prompt()
+            yield serial

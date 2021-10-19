@@ -6,23 +6,21 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from math import inf
 from pathlib import Path
 from types import TracebackType
-from typing import Any, AsyncIterator, Optional, Type
+from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Type
 
 import anyio
 import serial
 from anyio.abc import TaskGroup, TaskStatus
 from anyio.lowlevel import checkpoint
 
-from .util import DelimitedBuffer
+from ..util import DelimitedBuffer
+from ._command_line import CommandLine
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class Console:
-    """Serial console used to send commands to the device.
-
-    Works both in U-boot and Linux.
-    """
+class SerialCommandLine(CommandLine):
+    """Serial command line used to send commands to the device."""
 
     def __init__(
         self,
@@ -61,24 +59,24 @@ class Console:
     @asynccontextmanager
     async def run_in_background(
         cls, *args: Any, **kwargs: Any
-    ) -> AsyncIterator[Console]:
-        """Create a console and run it in the background.
+    ) -> AsyncIterator[SerialCommandLine]:
+        """Create a command line and run it in the background.
 
         This is a convenience method that creates a `TaskGroup` internally.
         """
         async with anyio.create_task_group() as tg:
-            async with cls(tg, *args, **kwargs) as console:
-                yield console
+            async with cls(tg, *args, **kwargs) as command_line:
+                yield command_line
 
     async def force_prompt(self) -> None:
         """Force the prompt to appear.
 
-        This is done by continuously spamming the console via the serial
-        connection. During boot, any message will halt the boot sequence
+        This is done by continuously spamming the command line with "echo".
+        During boot, any message will halt the boot sequence
         and show the prompt.
 
         We use this during boot to interrupt the boot process and enter,
-        e.g., the U-boot console.
+        e.g., the U-boot command line.
         """
         # Spam the serial line with simple "echo" commands.
         for i in itertools.count():  # Infinite range
@@ -139,6 +137,11 @@ class Console:
         return resp
 
     async def _cmd(self, cmd: str, *, wait_for_prompt: bool = True) -> Optional[str]:
+        if "\n" in cmd:
+            # We don't allow end-line characters. I.e., we don't allow multi-line
+            # commands. Said commands interfere with our error check at [2] and
+            # the subsequent result parsing.
+            raise ValueError("Command can't contain end-line characters.")
         # Note that `write_line ` adds an end-line character. In turn, this causes
         # the device to execute the given command.
         await self.write_line(cmd)
@@ -149,13 +152,13 @@ class Console:
         # raw = resp.encode("unicode_escape").decode("utf-8")
         # self._logger.debug(f"raw resp: <<{raw}>>")
         # Check that we got our command back
-        if not resp.startswith(cmd):
+        if not resp.startswith(cmd):  # [2]
             raise RuntimeError("Could not send command")
         # 2, because of \r\n
         return resp[len(cmd) + 2 :]
 
     async def write_line(self, text: str) -> None:
-        """Write to this serial console (suffixed with an end-line character).
+        """Write the given text (suffixed with an end-line character).
 
         If you want to execute a command on the device, use `cmd` instead. The latter
         has optional error checks and result parsing.
@@ -164,7 +167,7 @@ class Console:
             self._serial.write((text + "\n").encode())
 
     async def _run(self, task_status: TaskStatus) -> None:
-        """Parse input from this serial console.
+        """Parse input from this command line.
 
         Put data in `_responses` whenever the prompt is found in the input.
 
@@ -201,7 +204,7 @@ class Console:
                         ).decode()
                     except UnicodeDecodeError:
                         self._logger.warning(
-                            "Could not decode data from console. Skipping said data."
+                            "Could not decode data from command line. Skipping said data."
                         )
                         continue
                     if raw_serial_data:
@@ -228,7 +231,7 @@ class Console:
                         buffer = responses[-1]
                 await anyio.sleep(0.01)
 
-    async def __aenter__(self) -> Console:
+    async def __aenter__(self) -> SerialCommandLine:
         await self._tg.start(self._run)
         return self
 

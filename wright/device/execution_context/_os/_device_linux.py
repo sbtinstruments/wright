@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, AsyncIterator, Optional
 
 import anyio
 from anyio.abc import TaskGroup
 
+from ....command_line import SerialCommandLine
 from ..._device_condition import DeviceCondition
 from .._deteriorate import deteriorate
 from .._enter_context import enter_context
@@ -24,36 +26,9 @@ class DeviceLinux(Linux):
     """
 
     def __init__(
-        self,
-        device: "Device",
-        tg: TaskGroup,
-        prompt: Optional[str] = None,
-        *,
-        force_prompt_timeout: Optional[float] = None,
-        enter_force_prompt_delay: Optional[float] = None,
-        kernel_log_level: Optional[int] = None,
-        **kwargs: Any,
+        self, device: "Device", tg: TaskGroup, kernel_log_level: Optional[int] = None
     ) -> None:
-        # Default arguments
-        if prompt is None:
-            communication = device.link.communication
-            # We assume that the device uses sbtOS for now. This way, we know what
-            # the prompt looks like.
-            prompt = f"\r\n\x1b[1;34mroot@{communication.hostname}\x1b[m$ "
-        if force_prompt_timeout is None:
-            force_prompt_timeout = 90
-        if enter_force_prompt_delay is None:
-            # Found empirically. This changes depending on the init scripts
-            # used on the device.
-            enter_force_prompt_delay = 50
-        super().__init__(
-            device,
-            tg,
-            prompt,
-            **kwargs,
-            force_prompt_timeout=force_prompt_timeout,
-            enter_force_prompt_delay=enter_force_prompt_delay,
-        )
+        super().__init__(device, tg)
         # Kernel logging messes with the serial output. That is, sometimes the
         # kernel will spam the serial line with driver info messages. Said
         # messages interfere with how we parse the serial line.
@@ -85,7 +60,13 @@ class DeviceLinux(Linux):
         await self.cmd("[ -f /etc/init.d/S50nginx ] && /etc/init.d/S50nginx stop")
         await self.cmd("/etc/init.d/S01rsyslogd stop")
 
-    async def _on_enter_pre_prompt(self) -> None:
+    @deteriorate(DeviceCondition.AS_NEW)
+    async def get_processes(self) -> dict[int, str]:
+        """Return overview of the processes that run on the device."""
+        encoded = await self.py(_PY_PRINT_PROCESSES)
+        return encoded
+
+    async def _boot(self) -> None:
         # We assume that the device uses U-boot and sbtOS. This way, we know how to
         # enter Linux.
 
@@ -102,3 +83,31 @@ class DeviceLinux(Linux):
             if self._kernel_log_level is not None:
                 await uboot.set_boot_args(loglevel="0")
             await uboot.boot_to_device_os()
+
+    @asynccontextmanager
+    async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
+        communication = self.device.link.communication
+        # We assume that the device uses sbtOS for now. This way, we know what
+        # the prompt looks like.
+        prompt = f"\r\n\x1b[1;34mroot@{communication.hostname}\x1b[m$ "
+        async with self._create_serial(prompt) as serial:
+            if not self._should_skip_boot():
+                # Wait until the serial prompt is just about to appear.
+                # We found the length of this sleep empirically.
+                await anyio.sleep(50)
+            # Spam 'echo' commands until the serial prompt appears
+            with anyio.fail_after(90):
+                await serial.force_prompt()
+            yield serial
+
+
+_PY_PRINT_PROCESSES = """
+import psutil;
+processes = {
+    p.pid: p.as_dict(attrs=['name', 'cmdline'])
+    for p in psutil.process_iter()
+};
+print(processes)
+""".replace(
+    "\n", ""
+)

@@ -15,7 +15,7 @@ class DeviceCommunication(FrozenModel):
 
     # We use this to, e.g., identify the device on the local network
     hostname: str
-    # Terminal for the UART serial console
+    # Terminal for the UART serial command line
     tty: Path = Field(default_factory=get_first_tty)
     # We use this to identify the JTAG connection to the device
     jtag_usb_serial: Optional[str] = None

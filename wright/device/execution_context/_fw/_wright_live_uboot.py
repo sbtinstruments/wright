@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, asynccontextmanager
 from importlib import resources
 from logging import Logger
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, AsyncIterator, Optional
 
 import anyio
-from anyio.abc import TaskGroup
 
 from .... import openocd as ocd
+from ....command_line import SerialCommandLine
 from ....subprocess import run_process
 from ....util import TEMP_DIR
 from ... import assets
@@ -38,31 +38,28 @@ class WrightLiveUboot(Uboot):
     This is ideal for, e.g., an unused board that comes straight from the manufacturer.
     """
 
-    def __init__(
-        self,
-        device: "Device",
-        tg: TaskGroup,
-        prompt: Optional[str] = None,
-        **kwargs: Any,
-    ) -> None:
-        # Default arguments
-        if prompt is None:
-            # The built-in U-boot is based on the "bactobox" defconfig. Therefore,
-            # the hostname is "bactobox". It works fine on, e.g., a Zeus device as
-            # well.
-            # TODO: Change hostname of built-in U-boot to something generic like
-            # "green mango".
-            prompt = "\r\nbactobox> "
-        super().__init__(device, tg, prompt, **kwargs)
-
-    async def _on_enter_pre_prompt(self) -> None:
-        with self._dev.scoped_boot_mode(BootMode.JTAG):
-            await self._dev.hard_restart()
+    async def _boot(self) -> None:
+        with self.device.scoped_boot_mode(BootMode.JTAG):
+            await self.device.hard_restart()
             # The Zynq chip does its boot mode check within the first 100 ms.
             # Therefore, we wait 100 ms before we switch back to the default
             # boot mode.
             await anyio.sleep(0.1)
-        await jtag_boot_to_uboot(self._dev)
+        await jtag_boot_to_uboot(self.device)
+
+    @asynccontextmanager
+    async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
+        # The built-in U-boot is based on the "bactobox" defconfig. Therefore,
+        # the hostname is "bactobox". It works fine on, e.g., a Zeus device as
+        # well.
+        # TODO: Change hostname of built-in U-boot to something generic like
+        # "green mango".
+        prompt = "\r\nbactobox> "
+        async with self._create_serial(prompt) as serial:
+            # Spam 'echo' commands until the serial prompt appears
+            with anyio.fail_after(5):
+                await serial.force_prompt()
+            yield serial
 
 
 async def jtag_boot_to_uboot(device: "Device") -> None:

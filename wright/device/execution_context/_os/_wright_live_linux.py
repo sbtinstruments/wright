@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Optional
 
-from anyio.abc import TaskGroup
+import anyio
+from anyio.lowlevel import checkpoint
 
+from ....command_line import SerialCommandLine
 from ..._device_condition import DeviceCondition
 from .._deteriorate import deteriorate
 from .._enter_context import enter_context
 from .._fw import DeviceUboot
 from ._linux import Linux
-
-if TYPE_CHECKING:
-    from ..._device import Device
 
 
 class WrightLiveLinux(Linux):
@@ -29,42 +29,6 @@ class WrightLiveLinux(Linux):
     This is ideal if you, e.g., want to format a file system partition.
     """
 
-    def __init__(
-        self,
-        device: "Device",
-        tg: TaskGroup,
-        prompt: Optional[str] = None,
-        *,
-        enter_force_prompt_delay: Optional[float] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        **kwargs: Any,
-    ) -> None:
-        # Default arguments
-        if prompt is None:
-            communication = device.link.communication
-            # TODO: Remove the path (the "~" part) from the prompt.
-            # This is a change to the wright image itself. Ohterwise,
-            # we fail to recognize the prompt if the user changes the
-            # current working directory. For now, we simply don't change the
-            # current working directory.
-            prompt = f"\r\nroot@{communication.hostname}:~# "
-        if enter_force_prompt_delay is None:
-            enter_force_prompt_delay = 15
-        if username is None:
-            username = "root"
-        if password is None:
-            password = ""
-        super().__init__(
-            device,
-            tg,
-            prompt,
-            **kwargs,
-            enter_force_prompt_delay=enter_force_prompt_delay,
-            username=username,
-            password=password,
-        )
-
     @deteriorate(DeviceCondition.AS_NEW)
     async def unbock_data_partition(self) -> None:
         """Stop all processes/mounts that may use the data partition."""
@@ -74,6 +38,46 @@ class WrightLiveLinux(Linux):
         await self.cmd("umount /var/lib")
         await self.cmd("umount /var/log")
 
-    async def _on_enter_pre_prompt(self) -> None:
+    async def _boot(self) -> None:
         async with enter_context(DeviceUboot, self._dev) as uboot:
             await uboot.boot_to_wright_live_linux()
+
+    @asynccontextmanager
+    async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
+        communication = self.device.link.communication
+        # TODO: Remove the path (the "~" part) from the prompt.
+        # This is a change to the wright image itself. Ohterwise,
+        # we fail to recognize the prompt if the user changes the
+        # current working directory. For now, we simply don't change the
+        # current working directory.
+        prompt = f"\r\nroot@{communication.hostname}:~# "
+        async with self._create_serial(prompt) as serial:
+            if not self._should_skip_boot():
+                # Wait until the serial prompt is just about to appear.
+                # We found the length of this sleep empirically.
+                await anyio.sleep(15)
+                # The authentication is at the default values
+                await _log_in_over_serial(serial, username="root", password="")
+            # Spam 'echo' commands until the serial prompt appears
+            with anyio.fail_after(30):
+                await serial.force_prompt()
+            yield serial
+
+
+async def _log_in_over_serial(
+    serial: SerialCommandLine,
+    *,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+) -> None:
+    """Log in to the device over the serial connection."""
+    noop = True
+    if username is not None:
+        await serial.write_line(username)
+        noop = False
+    if password is not None:
+        await serial.write_line(password)
+        noop = False
+    # Checkpoint for the no-operation (noop) case
+    if noop:
+        await checkpoint()

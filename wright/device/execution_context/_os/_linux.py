@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Optional
 
 from ..._device_condition import DeviceCondition
-from .._console_base import ConsoleBase
 from .._deteriorate import deteriorate
+from .._serial_base import SerialBase
 
 
-class Linux(ConsoleBase, ABC):
+class Linux(SerialBase, ABC):
     """Base class for Linux-based execution contexts."""
 
     @deteriorate(DeviceCondition.USED)
@@ -55,3 +56,8 @@ class Linux(ConsoleBase, ABC):
                 continue
             result[words[0]] = words[1]
         return result
+
+    @deteriorate(DeviceCondition.AS_NEW)
+    async def py(self, py_code: str) -> Optional[str]:
+        """Run the given python code and return the result."""
+        return await self.cmd(f'python -c "{py_code}"')

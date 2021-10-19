@@ -12,8 +12,8 @@ from ....tftp import AsyncTFTPServer
 from ....util import TEMP_DIR, get_local_ip, split_file
 from ... import assets
 from ..._device_condition import DeviceCondition
-from .._console_base import ConsoleBase
 from .._deteriorate import deteriorate
+from .._serial_base import SerialBase
 from ._mmc import MmcPartition
 
 if TYPE_CHECKING:
@@ -23,24 +23,11 @@ if TYPE_CHECKING:
 MemoryAddress = Union[str, int]
 
 
-class Uboot(ConsoleBase, ABC):
+class Uboot(SerialBase, ABC):
     """Base class for U-boot-based execution contexts."""
 
-    def __init__(
-        self,
-        device: "Device",
-        tg: TaskGroup,
-        prompt: str,
-        *,
-        force_prompt_timeout: Optional[float] = None,
-        **kwargs: Any,
-    ) -> None:
-        # Default arguments
-        if force_prompt_timeout is None:
-            force_prompt_timeout = 5
-        super().__init__(
-            device, tg, prompt, **kwargs, force_prompt_timeout=force_prompt_timeout
-        )
+    def __init__(self, device: "Device", tg: TaskGroup) -> None:
+        super().__init__(device, tg)
         # This is the memory address that we use as temporary scratch space for
         # e.g., file transfers.
         self._default_memory_address = 0x6000000
@@ -333,6 +320,3 @@ class Uboot(ConsoleBase, ABC):
         # https://github.com/u-boot/u-boot/blob/a1e95e3805eacca1162f6049dceb9b1d2726cbf5/drivers/usb/host/ehci-hcd.c#L649
         await self.cmd("usb start")
         self._initialized_usb = True
-
-    async def _on_enter_pre_prompt(self) -> None:
-        await self._dev.hard_restart()
