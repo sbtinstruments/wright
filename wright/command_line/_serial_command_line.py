@@ -6,7 +6,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from math import inf
 from pathlib import Path
 from types import TracebackType
-from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Type
+from typing import Any, AsyncIterator, Optional, Type
 
 import anyio
 import serial
@@ -81,13 +81,13 @@ class SerialCommandLine(CommandLine):
         # Spam the serial line with simple "echo" commands.
         for i in itertools.count():  # Infinite range
             # Each command is unique (uses a different `i`) so that we
-            # can distinguish them. Otherwise, the `cmd` call may mistake
-            # a previous result as its own.
+            # can distinguish them. Otherwise, the `run` call may mistake
+            # a previous response as its own.
             try:
                 # Use a small timeout so that we really do spam the
                 # line and are able to interrupt a boot process.
                 with anyio.fail_after(0.1):
-                    resp = await self.cmd(f"echo {i}")
+                    resp = await self.run(f"echo {i}")
             except (RuntimeError, TimeoutError):
                 # If the command fails we simply try again
                 continue
@@ -121,50 +121,68 @@ class SerialCommandLine(CommandLine):
                 break
         return result
 
-    async def cmd(
-        self, cmd: str, *, wait_for_prompt: bool = True, check_error_code: bool = True
-    ) -> Optional[str]:
-        """Send command."""
-        resp = await self._cmd(cmd, wait_for_prompt=wait_for_prompt)
+    async def run(
+        self,
+        command: str,
+        *,
+        check_error_code: bool = True,
+        strip_trailing_white_space: bool = True,
+        **_: Any,
+    ) -> str:
+        """Run command and wait for the response."""
+        await self.run_nowait(command)
+        resp = await self.wait_for_prompt()
+        # raw = resp.encode("unicode_escape").decode("utf-8")
+        # self._logger.debug(f"raw resp: <<{raw}>>")
+        # Check that we got our command back. Note that even though we submit
+        # the command suffixed with a single "\n" (see [3]), we get it back
+        # suffixed with "\r\n".
+        returned_command = command + "\r\n"
+        if not resp.startswith(returned_command):  # [2]
+            raise RuntimeError("Could not send command")
+        # Remove the returned command from the response
+        resp = resp[len(returned_command) :]
+        # Strip any trailing "new line" characters.
+        #
+        # Most commands output trailing new lines for formatting purposes.
+        # I.e., to ensure that the prompt appears on a new line and not directly
+        # after the output. This does not apply to all commands, however.
+        # E.g., `cat` doesn't add a trailing new line character.
+        #
+        # Disable this feature with `strip_trailing_white_space` if you know the exact
+        # output format of your command and rely on it. E.g., if you want to use `cat`
+        # to check a file for trailing new line characters.
+        if strip_trailing_white_space:
+            resp = resp.rstrip("\r\n")
         # Early out
-        if not wait_for_prompt or not check_error_code:
+        if not check_error_code:
             return resp
-        # Check error code
-        error_code = await self._cmd("echo $?")
+        # Check error code via recursive call
+        error_code = await self.run("echo $?", check_error_code=False)
         assert error_code is not None
         if error_code.strip() != "0":
             raise RuntimeError(f"Command failed with error code {error_code}")
         return resp
 
-    async def _cmd(self, cmd: str, *, wait_for_prompt: bool = True) -> Optional[str]:
-        if "\n" in cmd:
+    async def run_nowait(self, command: str) -> None:
+        """Run command but don't wait for a response."""
+        if "\n" in command:
             # We don't allow end-line characters. I.e., we don't allow multi-line
             # commands. Said commands interfere with our error check at [2] and
             # the subsequent result parsing.
             raise ValueError("Command can't contain end-line characters.")
         # Note that `write_line ` adds an end-line character. In turn, this causes
         # the device to execute the given command.
-        await self.write_line(cmd)
-        # Early out
-        if not wait_for_prompt:
-            return None
-        resp = await self.wait_for_prompt()
-        # raw = resp.encode("unicode_escape").decode("utf-8")
-        # self._logger.debug(f"raw resp: <<{raw}>>")
-        # Check that we got our command back
-        if not resp.startswith(cmd):  # [2]
-            raise RuntimeError("Could not send command")
-        # 2, because of \r\n
-        return resp[len(cmd) + 2 :]
+        await self.write_line(command)
 
     async def write_line(self, text: str) -> None:
         """Write the given text (suffixed with an end-line character).
 
-        If you want to execute a command on the device, use `cmd` instead. The latter
+        If you want to run a command on the device, use `run` instead. The latter
         has optional error checks and result parsing.
         """
         async with self._serial_lock:
-            self._serial.write((text + "\n").encode())
+            self._serial.write((text + "\n").encode())  # [3]
 
     async def _run(self, task_status: TaskStatus) -> None:
         """Parse input from this command line.

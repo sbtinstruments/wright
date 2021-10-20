@@ -33,13 +33,13 @@ class WrightLiveLinux(Linux):
     async def unbock_data_partition(self) -> None:
         """Stop all processes/mounts that may use the data partition."""
         self.logger.info("Stop all services that may use the data partition")
-        await self.cmd("/etc/init.d/syslog stop")
+        await self.run("/etc/init.d/syslog stop")
         self.logger.info("Unmount overlayfs mounts that link to the data partition")
-        await self.cmd("umount /var/lib")
-        await self.cmd("umount /var/log")
+        await self.run("umount /var/lib")
+        await self.run("umount /var/log")
 
     async def _boot(self) -> None:
-        async with enter_context(DeviceUboot, self._dev) as uboot:
+        async with enter_context(DeviceUboot, self.device) as uboot:
             await uboot.boot_to_wright_live_linux()
 
     @asynccontextmanager
@@ -50,7 +50,7 @@ class WrightLiveLinux(Linux):
         # we fail to recognize the prompt if the user changes the
         # current working directory. For now, we simply don't change the
         # current working directory.
-        prompt = f"\r\nroot@{communication.hostname}:~# "
+        prompt = f"root@{communication.hostname}:~# "
         async with self._create_serial(prompt) as serial:
             if not self._should_skip_boot():
                 # Wait until the serial prompt is just about to appear.

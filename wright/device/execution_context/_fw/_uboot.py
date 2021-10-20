@@ -55,7 +55,7 @@ class Uboot(SerialBase, ABC):
         """
         memory_address_hex = await self._resolve_memory_address_to_hex(memory_address)
         self.logger.info(f'Write memory at {memory_address_hex} to "{partition}"')
-        await self.cmd(
+        await self.run(
             f"mmc write {memory_address_hex} "
             f"{hex(partition.offset)} "
             f"{hex(partition.length)}"
@@ -85,7 +85,7 @@ class Uboot(SerialBase, ABC):
         await self._probe_flash()
         self.logger.info("Erase FLASH memory")
         size = 16 * 1024 ** 2  # 16 MiB
-        await self.cmd(f"sf erase 0 {hex(size)}")
+        await self.run(f"sf erase 0 {hex(size)}")
 
     async def _probe_flash(self) -> None:
         """Initialize the flash subsystem.
@@ -98,7 +98,7 @@ class Uboot(SerialBase, ABC):
             self.logger.debug("Already probed FLASH")
             return
         self.logger.info("Probe FLASH memory")
-        await self.cmd("sf probe")
+        await self.run("sf probe")
         self._probed_flash = True
 
     @deteriorate(DeviceCondition.USED)
@@ -120,7 +120,7 @@ class Uboot(SerialBase, ABC):
             offset_hex,
             length_hex,
         )
-        await self.cmd(f"sf write {memory_address_hex} {offset_hex} {length_hex}")
+        await self.run(f"sf write {memory_address_hex} {offset_hex} {length_hex}")
 
     async def copy_kernel_image_to_memory(self, image: str) -> None:
         """Copy the given kernel image to device memory."""
@@ -165,7 +165,7 @@ class Uboot(SerialBase, ABC):
         address_hex = await self._resolve_memory_address_to_hex(address)
         await self._initialize_network()
         self.logger.info("Copy %s to device memory at %s", str(file), address_hex)
-        await self.cmd(f"tftpboot {address_hex} {file}")
+        await self.run(f"tftpboot {address_hex} {file}")
 
     async def _resolve_memory_address_to_hex(
         self, address: Optional[MemoryAddress] = None
@@ -197,7 +197,7 @@ class Uboot(SerialBase, ABC):
     async def set_boot_args(self, **boot_args: str) -> None:
         """Use the given keyword arguments as boot arguments."""
         raw_arg_string = " ".join(f"{key}={value}" for key, value in boot_args.items())
-        await self.cmd(f"setenv bootargs {raw_arg_string}")
+        await self.run(f"setenv bootargs {raw_arg_string}")
 
     @deteriorate(DeviceCondition.AS_NEW)
     async def boot_to_device_os(self) -> None:
@@ -207,7 +207,7 @@ class Uboot(SerialBase, ABC):
         # thinks that it woke because we inserted the power cable.
         # Instead, we run the "dualcopy_mmcboot" command directly, which takes us
         # straight into the operating system (kernel and rootfs) stored on the device.
-        await self.cmd("run dualcopy_mmcboot", wait_for_prompt=False)
+        await self.serial.run_nowait("run dualcopy_mmcboot")
         # At this point, this U-boot context is no longer valid. Therefore,
         # we close this context.
         await self.aclose()
@@ -223,9 +223,8 @@ class Uboot(SerialBase, ABC):
         await self.set_boot_args(loglevel="0")
         # Don't wait for the prompt since we transfer control to the operating
         # system from here on and out.
-        await self.cmd(
-            "bootm ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}",
-            wait_for_prompt=False,
+        await self.serial.run_nowait(
+            "bootm ${kernel_addr_r} ${ramdisk_addr_r} ${fdtcontroladdr}"
         )
         # At this point, this U-boot context is no longer valid. Therefore,
         # we close this context.
@@ -233,7 +232,7 @@ class Uboot(SerialBase, ABC):
 
     async def get_env(self, name: str) -> str:
         """Get a U-boot environment variable by name."""
-        result = await self.cmd(f"printenv {name}")
+        result = await self.run(f"printenv {name}")
         assert isinstance(result, str), "We expect a string result from printenv"
         # If `name="my_var"` then `result="my_var=32"`. Therefore, we need
         # to strip the "my_var=" part away from the result before we return it.
@@ -260,17 +259,17 @@ class Uboot(SerialBase, ABC):
         # Unfortunately, the `dhcp` command does both. When the latter
         # fails, it returns with error code 1. Therefore, we ignore the
         # error code.
-        await self.cmd("dhcp", check_error_code=False)
-        await self.cmd(f"setenv serverip {self._tftp_host}")
-        await self.cmd(f"setenv tftpdstp {self._tftp_port}")
+        await self.run("dhcp", check_error_code=False)
+        await self.run(f"setenv serverip {self._tftp_host}")
+        await self.run(f"setenv tftpdstp {self._tftp_port}")
         # Increase block and window sizes to improve transfer speeds.
         # In practice, this improves transfer speeds tenfold. E.g.,
         # from ~1 MB/s to ~10 MB/s.
-        await self.cmd("setenv tftpblocksize 1468")
-        await self.cmd("setenv tftpwindowsize 256")
+        await self.run("setenv tftpblocksize 1468")
+        await self.run("setenv tftpwindowsize 256")
         # We exploit the "tftpboot" command and make it do arbitrary file transfers.
         # In order to do so, we disable the "boot" aspect of it with `autostart=no`.
-        await self.cmd("setenv autostart no")
+        await self.run("setenv autostart no")
         self._initialized_network = True
 
     async def _start_tftp_server(self) -> None:
@@ -296,7 +295,7 @@ class Uboot(SerialBase, ABC):
 
         if force:
             self.logger.info("Reset USB subsystem")
-            await self.cmd("usb reset")
+            await self.run("usb reset")
 
         # U-boot doesn't handle "quirky" USB devices as well as Linux (U-boot
         # doesn't have a "quirks table" like Linux). Consequently, U-boot may
@@ -318,5 +317,5 @@ class Uboot(SerialBase, ABC):
         #
         # The line of code that prints the "EHCI timed out..." warning:
         # https://github.com/u-boot/u-boot/blob/a1e95e3805eacca1162f6049dceb9b1d2726cbf5/drivers/usb/host/ehci-hcd.c#L649
-        await self.cmd("usb start")
+        await self.run("usb start")
         self._initialized_usb = True

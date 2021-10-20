@@ -37,7 +37,7 @@ class DeviceUboot(Uboot):
     async def partition_mmc(self) -> None:
         """Partition the device's MMC memory."""
         self.logger.info("Partition MMC memory")
-        await self.cmd(
+        await self.run(
             'gpt write mmc 0 "'
             "name=system0,size=150MiB;"
             "name=system1,size=150MiB;"
@@ -56,7 +56,7 @@ class DeviceUboot(Uboot):
     @asynccontextmanager
     async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
         # E.g. "bactobox>" or "zeus>" with some whitespace chars
-        prompt = f"\r\n{type(self.device).__name__.lower()}> "
+        prompt = f"{type(self.device).__name__.lower()}> "
         async with self._create_serial(prompt) as serial:
             # Spam 'echo' commands until the serial prompt appears
             with anyio.fail_after(5):

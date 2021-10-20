@@ -80,8 +80,8 @@ def reset_device(
 
 
 @app.command()
-def cmd(
-    cmd: str,
+def run(
+    command: str,
     *,
     device_type: DeviceType = typer.Option(..., envvar="WRIGHT_DEVICE_TYPE"),
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
@@ -90,7 +90,7 @@ def cmd(
     power_relay: Optional[int] = typer.Option(None, envvar="WRIGHT_POWER_RELAY"),
     boot_mode_gpio: Optional[int] = typer.Option(None, envvar="WRIGHT_BOOT_MODE_GPIO"),
 ) -> None:
-    """Execute the given command in Wright Linux."""
+    """Run the given command in Wright Live Linux."""
     # Device description (translate CLI args)
     description = DeviceDescription.from_raw_args(
         device_type=device_type,
@@ -104,7 +104,7 @@ def cmd(
 
     async def _boot() -> None:
         async with device, enter_context(WrightLiveLinux, device) as linux:
-            await linux.cmd(cmd)
+            await linux.run(command)
 
     anyio.run(_boot)
 

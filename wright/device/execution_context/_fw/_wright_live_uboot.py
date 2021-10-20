@@ -54,7 +54,7 @@ class WrightLiveUboot(Uboot):
         # well.
         # TODO: Change hostname of built-in U-boot to something generic like
         # "green mango".
-        prompt = "\r\nbactobox> "
+        prompt = "bactobox> "
         async with self._create_serial(prompt) as serial:
             # Spam 'echo' commands until the serial prompt appears
             with anyio.fail_after(5):
@@ -91,19 +91,19 @@ async def jtag_boot_to_uboot(device: "Device") -> None:
 
         # Low-level OCD control
         device.logger.info("Reset and halt CPU")
-        await ocd_client.cmd("reset halt")
+        await ocd_client.run("reset halt")
         device.logger.info("Copy FSBL to device memory")
-        await ocd_client.cmd(f"load_image {_FSBL_FILE} 0 elf")
+        await ocd_client.run(f"load_image {_FSBL_FILE} 0 elf")
         device.logger.info("Execute FSBL")
-        await ocd_client.cmd("resume 0")
-        await ocd_client.cmd("sleep 4000")
+        await ocd_client.run("resume 0")
+        await ocd_client.run("sleep 4000")
         device.logger.info("Copy U-boot to device memory")
-        await ocd_client.cmd("halt")
-        await ocd_client.cmd(f"load_image {_UBOOT_FILE} 0x04000000 bin")
+        await ocd_client.run("halt")
+        await ocd_client.run(f"load_image {_UBOOT_FILE} 0x04000000 bin")
 
         # TODO: Call `Console.force_prompt` before we resume
         device.logger.info("Execute U-boot")
-        await ocd_client.cmd("resume 0x04000000")
+        await ocd_client.run("resume 0x04000000")
 
 
 def _extract_files(*, logger: Logger) -> None:

@@ -40,13 +40,13 @@ class Client:
         self._stream: Optional[SocketStream] = None
         self._stack: Optional[AsyncExitStack] = None
 
-    async def cmd(self, cmd: str) -> None:
-        """Send command to the OCD server."""
+    async def run(self, command: str) -> None:
+        """Run command on the OCD server."""
         # Early out
         if self._stream is None:
             raise RuntimeError("Enter client context first")
         # Send the request
-        await self._stream.send(cmd.encode() + _SEPARATOR)
+        await self._stream.send(command.encode() + _SEPARATOR)
         # Wait for a response
         response_data = await self._stream.receive()
         # Split the raw response. If everything goes as planned, we get something

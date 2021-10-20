@@ -13,13 +13,14 @@ from typing import (
 
 from anyio.abc import TaskGroup
 
-from ...command_line import SerialCommandLine
+from ...command_line import CommandLine, SerialCommandLine
 from ._base import Base
 
 if TYPE_CHECKING:
     from .._device import Device
 
 Derived = TypeVar("Derived", bound="Base")
+ParseType = TypeVar("ParseType")
 
 
 class SerialBase(Base):
@@ -29,6 +30,14 @@ class SerialBase(Base):
         super().__init__(device, tg)
         self._serial: Optional[SerialCommandLine] = None
         self._stack: Optional[AsyncExitStack] = None
+
+    @property
+    def command_line(self) -> CommandLine:
+        """Return the preferred command line.
+
+        We use this command line for the `run` and `run_parsed` methods.
+        """
+        return self.serial
 
     @property
     def serial(self) -> SerialCommandLine:
@@ -56,14 +65,20 @@ class SerialBase(Base):
         # Command line
         return SerialCommandLine(
             self._tg,
-            self._dev.link.communication.tty,
+            self.device.link.communication.tty,
             prompt,
             logger=serial_logger,
         )
 
-    async def cmd(self, *args: Any, **kwargs: Any) -> Optional[str]:
-        """Send command through the command line."""
-        return await self.serial.cmd(*args, **kwargs)
+    async def run(self, command: str, **kwargs: Any) -> str:
+        """Run command and wait for the response."""
+        return await self.command_line.run(command, **kwargs)
+
+    async def run_parsed(
+        self, command: str, parse_as: Type[ParseType], **kwargs: Any
+    ) -> ParseType:
+        """Run command and wait for the parsed response."""
+        return await self.command_line.run_parsed(command, parse_as, **kwargs)
 
     async def aclose(self) -> None:
         """Close this context.
@@ -75,7 +90,7 @@ class SerialBase(Base):
         self._raise_if_exited()
         assert self._stack is not None
         await self._stack.aclose()
-        self._dev.metadata = self._dev.metadata.update(execution_context=None)
+        self.device.metadata = self.device.metadata.update(execution_context=None)
 
     async def __aenter__(self) -> Derived:
         await self._boot_if_necessary()

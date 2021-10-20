@@ -30,7 +30,7 @@ class Base(AsyncContextManager["Base"]):
     def __init__(self, device: "Device", tg: TaskGroup) -> None:
         self._dev = device
         self._tg = tg
-        self._logger = self._dev.logger
+        self._logger = device.logger
         self._entered = False
         self._exited = False
 
@@ -76,7 +76,7 @@ class Base(AsyncContextManager["Base"]):
         E.g., if the device is already in an execution context of our type.
         This can save us from, e.g., the lengthy Linux boot sequence.
         """
-        return type(self).is_entered(self._dev)
+        return type(self).is_entered(self.device)
 
     @abstractmethod
     async def _boot(self) -> None:
@@ -87,7 +87,7 @@ class Base(AsyncContextManager["Base"]):
         ...
 
     async def __aenter__(self) -> Derived:
-        self._dev.metadata = self._dev.metadata.update(execution_context=type(self))
+        self.device.metadata = self.device.metadata.update(execution_context=type(self))
         self._entered = True
         return cast(Derived, self)
 
@@ -100,7 +100,7 @@ class Base(AsyncContextManager["Base"]):
         self._exited = True
         # Invalidate context if we exit with an error
         if exc_type is not None:
-            self._dev.metadata = self._dev.metadata.update(execution_context=None)
+            self.device.metadata = self.device.metadata.update(execution_context=None)
 
     def __del__(self) -> None:
         if self._entered and not self._exited:
