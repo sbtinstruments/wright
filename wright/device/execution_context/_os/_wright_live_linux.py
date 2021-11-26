@@ -35,8 +35,11 @@ class WrightLiveLinux(Linux):
         self.logger.info("Stop all services that may use the data partition")
         await self.run("/etc/init.d/syslog stop")
         self.logger.info("Unmount overlayfs mounts that link to the data partition")
-        await self.run("umount /var/lib")
-        await self.run("umount /var/log")
+        # Sometimes, the data partition doesn't exist already or is corrupted.
+        # In this case, the following `umount`s fail. Therefore, we ignore the
+        # error code.
+        await self.run("umount /var/lib", check_error_code=False)
+        await self.run("umount /var/log", check_error_code=False)
 
     async def _boot(self) -> None:
         async with enter_context(DeviceUboot, self.device) as uboot:
