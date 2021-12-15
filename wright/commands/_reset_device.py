@@ -24,9 +24,9 @@ RESET_DEVICE_STATUS_MAP: StatusMap = {
     # Either here or in the recipes.
     "prepare": Idle(timedelta(seconds=60), 0),
     "reset_firmware": Idle(timedelta(seconds=110), 0),
-    "reset_software": Idle(timedelta(seconds=70), 0),
+    "reset_software": Idle(timedelta(seconds=80), 0),
     "reset_config": Idle(timedelta(seconds=40), 0),
-    "reset_data": Idle(timedelta(seconds=50), 0),
+    "reset_data": Idle(timedelta(seconds=60), 0),
 }
 
 

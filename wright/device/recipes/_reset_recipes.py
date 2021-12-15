@@ -26,7 +26,7 @@ async def reset_firmware(device: Device, firmware_image: Path) -> None:
 
 async def reset_software(device: Device, software_image: Path) -> None:
     """Remove any existing software and write the given images to the device."""
-    with anyio.fail_after(70):
+    with anyio.fail_after(80):
         async with enter_context(DeviceUboot, device) as uboot:
             await uboot.partition_mmc()
             # We must power-cycle the device so that U-boot recognizes the
@@ -52,6 +52,6 @@ async def reset_config(device: Device, config_image: Path) -> None:
 
 async def reset_data(device: Device) -> None:
     """Remove all data on the device."""
-    with anyio.fail_after(50):
+    with anyio.fail_after(60):
         async with enter_context(WrightLiveLinux, device) as linux:
             await linux.reset_data()
