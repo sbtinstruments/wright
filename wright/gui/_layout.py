@@ -7,7 +7,7 @@ import PySimpleGUI as sg
 from ..commands import RESET_DEVICE_STATUS_MAP
 from ..config.branding import Branding
 from ..device import DeviceType
-from ._config import CONFIG
+from ._config import GUI_CONFIG_PATH
 
 
 def create_layout() -> list[Any]:
@@ -15,7 +15,7 @@ def create_layout() -> list[Any]:
     sg.theme("SystemDefaultForReal")
 
     try:
-        with CONFIG.open("r") as io:
+        with GUI_CONFIG_PATH.open("r") as io:
             defaults = json.load(io)
     except (OSError, json.JSONDecodeError):
         defaults = {}

@@ -32,7 +32,7 @@ from ..progress import (
     StatusStream,
 )
 from ._command_log import CommandLog, CommandStatus
-from ._config import CONFIG, COMMAND_LOG_PATH
+from ._config import GUI_CONFIG_PATH, COMMAND_LOG_PATH, LowLevelConfig
 from ._layout import create_layout
 from ._logging import GuiFormatter, GuiHandler
 
@@ -47,6 +47,8 @@ class WindowEventLoop:
         self._tg = tg
         self._cancel_scope: Optional[anyio.CancelScope] = None
         self._done: Optional[anyio.Event] = None
+        # Load low-level config
+        self._low_level_config = LowLevelConfig.try_from_config_file()
         # Create the Window
         self._window = sg.Window(
             "Reset Device", create_layout(), enable_close_attempted_event=True
@@ -111,7 +113,7 @@ class WindowEventLoop:
                 values_changed = prev_values != filtered_values
                 prev_values = filtered_values
                 if values_changed:
-                    with CONFIG.open("w") as config_file:
+                    with GUI_CONFIG_PATH.open("w") as config_file:
                         json.dump(filtered_values, config_file)
 
                     self._output.update(value="", background_color="white")
@@ -138,7 +140,7 @@ class WindowEventLoop:
                 # available, which raises a `ValidationError`.
                 if self._cancel_scope is None:
                     try:
-                        params = _get_parameters(values)
+                        params = _get_parameters(self._low_level_config, values)
                     # Catch broad `Exception` as we want to handle all the general errors
                     except Exception as exc:  # pylint: disable=broad-except
                         self._output.update(
@@ -344,7 +346,7 @@ class WindowEventLoop:
             element.update(disabled=flag)
 
 
-def _get_parameters(values: dict[str, Any]) -> ResetParams:
+def _get_parameters(low_level_config: LowLevelConfig, values: dict[str, Any]) -> ResetParams:
     # SWU
     swu = Path(values["swu_file"])
     if not swu.is_file():
@@ -352,7 +354,14 @@ def _get_parameters(values: dict[str, Any]) -> ResetParams:
     # Device description
     device_type = next(dt for dt in DeviceType if dt.name == values["device_type"])
     hostname = _get_hostname(values)
-    desc = DeviceDescription.from_raw_args(device_type=device_type, hostname=hostname)
+    desc = DeviceDescription.from_raw_args(
+        device_type=device_type,
+        hostname=hostname,
+        tty=low_level_config.tty,
+        jtag_usb_serial=low_level_config.jtag_usb_serial,
+        power_relay=low_level_config.power_relay,
+        boot_mode_gpio=low_level_config.boot_mode_gpio,
+    )
     # Branding
     branding = next(br for br in Branding if br.name == values["branding"])
     return (desc, swu, branding)
