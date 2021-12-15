@@ -17,7 +17,7 @@ def create_layout() -> list[Any]:
     try:
         with CONFIG.open("r") as io:
             defaults = json.load(io)
-    except OSError:
+    except (OSError, json.JSONDecodeError):
         defaults = {}
 
     swu_layout = [

@@ -32,14 +32,13 @@ from ..progress import (
     StatusStream,
 )
 from ._command_log import CommandLog, CommandStatus
-from ._config import CONFIG
+from ._config import CONFIG, COMMAND_LOG_PATH
 from ._layout import create_layout
 from ._logging import GuiFormatter, GuiHandler
 
 ResetParams = tuple[DeviceDescription, Path, Branding]
 
 _LOGGER = logging.getLogger()  # root logger
-
 
 class WindowEventLoop:
     """Event loop for the GUI."""
@@ -68,7 +67,7 @@ class WindowEventLoop:
         self._status_map = RESET_DEVICE_STATUS_MAP
         self._tg.start_soon(self._receive_steps)
         # Command log
-        self._command_log = CommandLog(Path("./command-log.csv"))
+        self._command_log = CommandLog(COMMAND_LOG_PATH)
         # Logging
         handler = GuiHandler(self._output)
         handler.setLevel(logging.DEBUG)
