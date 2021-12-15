@@ -16,3 +16,7 @@ test.py
 
 # IDE settings
 /.vscode
+
+# Auto-generated files from, e.g., the build system
+/setup.py
+/*.egg-info
