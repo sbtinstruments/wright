@@ -46,7 +46,7 @@ class Linux(SerialBase, ABC):
 
     @deteriorate(DeviceCondition.AS_NEW)
     async def get_versions(self) -> dict[str, str]:
-        """Return the versions of all installed firmware, software, etc."""
+        """Return the versions of all installed firmware, operating system, etc."""
         raw_versions = await self.run("cat /etc/sw-versions")
         assert raw_versions is not None
         result: dict[str, str] = dict()
@@ -75,4 +75,4 @@ class Linux(SerialBase, ABC):
 
 
 def _py_code_to_command(py_code: str) -> str:
-    return f'python -c "{py_code}"'
+    return f'python3 -c "{py_code}"'

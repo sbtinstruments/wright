@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 
 import anyio
-from anyio.lowlevel import checkpoint
 
 from ....command_line import SerialCommandLine
 from ..._device_condition import DeviceCondition
@@ -12,6 +11,7 @@ from .._deteriorate import deteriorate
 from .._enter_context import enter_context
 from .._fw import DeviceUboot
 from ._linux import Linux
+from ._log_in import force_log_in_over_serial
 
 
 class WrightLiveLinux(Linux):
@@ -49,7 +49,7 @@ class WrightLiveLinux(Linux):
     async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
         communication = self.device.link.communication
         # TODO: Remove the path (the "~" part) from the prompt.
-        # This is a change to the wright image itself. Ohterwise,
+        # This is a change to the wright image itself. Otherwise,
         # we fail to recognize the prompt if the user changes the
         # current working directory. For now, we simply don't change the
         # current working directory.
@@ -60,27 +60,9 @@ class WrightLiveLinux(Linux):
                 # We found the length of this sleep empirically.
                 await anyio.sleep(15)
                 # The authentication is at the default values
-                await _log_in_over_serial(serial, username="root", password="")
+                with anyio.fail_after(15):
+                    await force_log_in_over_serial(serial, username="root", password="")
             # Spam 'echo' commands until the serial prompt appears
             with anyio.fail_after(30):
                 await serial.force_prompt()
             yield serial
-
-
-async def _log_in_over_serial(
-    serial: SerialCommandLine,
-    *,
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-) -> None:
-    """Log in to the device over the serial connection."""
-    noop = True
-    if username is not None:
-        await serial.write_line(username)
-        noop = False
-    if password is not None:
-        await serial.write_line(password)
-        noop = False
-    # Checkpoint for the no-operation (noop) case
-    if noop:
-        await checkpoint()

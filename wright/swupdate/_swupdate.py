@@ -23,10 +23,10 @@ class DiskImage(FrozenModel):
 
 
 class DeviceBundle(FrozenModel):
-    """Combination of firmware and software update for a specific device."""
+    """Combination of firmware and operating system update for a specific device."""
 
     firmware: DiskImage
-    software: DiskImage
+    operating_system: DiskImage
 
 
 class MultiBundle(FrozenModel):
@@ -84,7 +84,7 @@ async def extract_swu(
 
 
 def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
-    """Get firmware and software versions from the description file."""
+    """Get firmware and operating system dvice bundles from the description file."""
     swu_dir = sw_description_file.parent
     # Load in the libconfig-encoded description file
     with sw_description_file.open("rt") as io:
@@ -98,15 +98,17 @@ def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
     device_descriptions: dict[str, dict[str, Any]] = {
         device_type: description
         for device_type, description in software.items()
-        if "images" in description
+        if "stable" in description
     }
     # Convert from the description structure to our own bundle structure
     raw_device_bundles: dict[str, dict[str, DiskImage]] = {
         device_type: {
-            image["name"]: DiskImage(
+            # Convert, e.g., "operating-system" to "operating_system"
+            image["name"].replace("-", "_"): DiskImage(
                 file=swu_dir / image["filename"], version=image["version"]
             )
-            for image in description["images"]
+            # This assumes a dual-copy strategy
+            for image in description["stable"]["system0"]["images"]
         }
         for device_type, description in device_descriptions.items()
     }

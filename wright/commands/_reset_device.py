@@ -24,7 +24,7 @@ RESET_DEVICE_STATUS_MAP: StatusMap = {
     # Either here or in the recipes.
     "prepare": Idle(timedelta(seconds=60), 0),
     "reset_firmware": Idle(timedelta(seconds=110), 0),
-    "reset_software": Idle(timedelta(seconds=80), 0),
+    "reset_operating_system": Idle(timedelta(seconds=90), 0),
     "reset_config": Idle(timedelta(seconds=40), 0),
     "reset_data": Idle(timedelta(seconds=60), 0),
 }
@@ -83,13 +83,13 @@ async def reset_device(
             settings=settings.reset_firmware,
         )
 
-        # Reset software
+        # Reset operating system
         await run_step(
-            power_off_on_error(recipes.reset_software, device),
-            device_bundle.software.file,
+            power_off_on_error(recipes.reset_operating_system, device),
+            device_bundle.operating_system.file,
             progress_manager=progress_manager,
             logger=logger,
-            settings=settings.reset_software,
+            settings=settings.reset_operating_system,
         )
 
         # Reset config

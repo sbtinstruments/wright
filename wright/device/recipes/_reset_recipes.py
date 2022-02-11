@@ -24,9 +24,9 @@ async def reset_firmware(device: Device, firmware_image: Path) -> None:
             await uboot.write_image_to_flash(firmware_image)
 
 
-async def reset_software(device: Device, software_image: Path) -> None:
-    """Remove any existing software and write the given images to the device."""
-    with anyio.fail_after(80):
+async def reset_operating_system(device: Device, operating_system_image: Path) -> None:
+    """Remove any existing operating system and write the given images to the device."""
+    with anyio.fail_after(90):
         async with enter_context(DeviceUboot, device) as uboot:
             await uboot.partition_mmc()
             # We must power-cycle the device so that U-boot recognizes the
@@ -38,7 +38,7 @@ async def reset_software(device: Device, software_image: Path) -> None:
             # in case of a broken (interrupted) software update. This is part of the
             # dual boot strategy.
             await uboot.write_image_to_mmc(
-                software_image, uboot.mmc.system0, uboot.mmc.system1
+                operating_system_image, uboot.mmc.system0, uboot.mmc.system1
             )
 
 

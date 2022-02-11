@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, AsyncIterator, Optional
 
 import anyio
 from anyio.abc import TaskGroup
-from pydantic import parse_raw_as
 
 from ....command_line import CommandLine, SerialCommandLine, SshCommandLine
 from ....model import FrozenModel
@@ -14,6 +13,7 @@ from .._deteriorate import deteriorate
 from .._enter_context import enter_context
 from .._fw import DeviceUboot
 from ._linux import Linux
+from ._log_in import force_log_in_over_serial
 
 if TYPE_CHECKING:
     from ..._device import Device
@@ -118,14 +118,20 @@ class DeviceLinux(Linux):
     @asynccontextmanager
     async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
         communication = self.device.link.communication
-        # We assume that the device uses sbtOS for now. This way, we know what
-        # the prompt looks like.
-        prompt = f"\x1b[1;34mroot@{communication.hostname}\x1b[m$ "
+        # TODO: Remove the path (the "~" part) from the prompt.
+        # This is a change to the wright image itself. Otherwise,
+        # we fail to recognize the prompt if the user changes the
+        # current working directory. For now, we simply don't change the
+        # current working directory.
+        prompt = f"root@{communication.hostname}:~# "
         async with self._create_serial(prompt) as serial:
             if not self._should_skip_boot():
                 # Wait until the serial prompt is just about to appear.
                 # We found the length of this sleep empirically.
-                await anyio.sleep(50)
+                await anyio.sleep(75)
+                with anyio.fail_after(15):
+                    # The authentication is at the default values
+                    await force_log_in_over_serial(serial, username="root", password="")
             # Spam 'echo' commands until the serial prompt appears
             with anyio.fail_after(90):
                 await serial.force_prompt()
