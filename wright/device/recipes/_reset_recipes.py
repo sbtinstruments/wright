@@ -26,7 +26,7 @@ async def reset_firmware(device: Device, firmware_image: Path) -> None:
 
 async def reset_operating_system(device: Device, operating_system_image: Path) -> None:
     """Remove any existing operating system and write the given images to the device."""
-    with anyio.fail_after(90):
+    with anyio.fail_after(80):
         async with enter_context(DeviceUboot, device) as uboot:
             await uboot.partition_mmc()
             # We must power-cycle the device so that U-boot recognizes the

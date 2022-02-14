@@ -151,9 +151,8 @@ async def _start_server(
 
 
 async def _power_cycle_usb_ports(*, logger: Optional[Logger] = None) -> None:
-    # TODO: Make the search term configurable. Fow now, we rely on the fact that
-    # we use a USB-JTAG adapter from "Digilent Digital".
-    command = "uhubctl", "--search", "Digilent", "--action", "cycle"
+    # TODO: Power cycle a specific USB port instead of all of them
+    command = "uhubctl", "--action", "cycle"
     await run_process(command, check_rc=True, stdout_logger=logger)
     # Wait a moment for the USB devices to set themselves up
     await anyio.sleep(2)

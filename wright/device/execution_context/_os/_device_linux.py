@@ -128,12 +128,12 @@ class DeviceLinux(Linux):
             if not self._should_skip_boot():
                 # Wait until the serial prompt is just about to appear.
                 # We found the length of this sleep empirically.
-                await anyio.sleep(75)
-                with anyio.fail_after(15):
+                await anyio.sleep(80)
+                with anyio.fail_after(80):
                     # The authentication is at the default values
                     await force_log_in_over_serial(serial, username="root", password="")
             # Spam 'echo' commands until the serial prompt appears
-            with anyio.fail_after(90):
+            with anyio.fail_after(160):
                 await serial.force_prompt()
             yield serial
 
