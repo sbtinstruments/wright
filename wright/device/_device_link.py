@@ -19,6 +19,8 @@ class DeviceCommunication(FrozenModel):
     tty: Path = Field(default_factory=get_first_tty)
     # We use this to identify the JTAG connection to the device
     jtag_usb_serial: Optional[str] = None
+    # Open On-Chip Debugger (OCD) port
+    ocd_tcl_port: Optional[int] = None
 
     # Note that we don't use `Field(default_factory=get_first_tty)`
     # because it doesn't allow us to get the default with `tty=None`.

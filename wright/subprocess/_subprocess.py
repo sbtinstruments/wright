@@ -8,7 +8,7 @@ from subprocess import STDOUT, CalledProcessError, SubprocessError
 from typing import Any, Optional, Pattern, Sequence, Union
 
 import anyio
-from anyio.abc import Process
+from anyio.abc import Process, TaskStatus
 from anyio.streams.file import FileReadStream
 from anyio.streams.text import TextReceiveStream
 
@@ -22,6 +22,8 @@ async def run_process(
     stdout_logger: Optional[Logger] = None,
     check_rc: Optional[bool] = None,
     error_regex: Optional[str] = None,
+    ready_regex: Optional[str] = None,
+    task_status: TaskStatus = anyio.TASK_STATUS_IGNORED,
     **kwargs: Any,
 ) -> None:
     """Run the given command as a process."""
@@ -33,6 +35,8 @@ async def run_process(
             stdin_file=stdin_file,
             stdout_logger=stdout_logger,
             error_regex=error_regex,
+            ready_regex=ready_regex,
+            task_status=task_status,
         )
     except BaseException:
         if process is not None:
@@ -79,12 +83,21 @@ async def _drain_streams(
     stdin_file: Optional[Path] = None,
     stdout_logger: Optional[Logger] = None,
     error_regex: Optional[str] = None,
+    ready_regex: Optional[str] = None,
+    task_status: TaskStatus = anyio.TASK_STATUS_IGNORED,
 ) -> None:
     async with anyio.create_task_group() as tg:
         if process.stdin is not None and stdin_file is not None:
             tg.start_soon(_send_to_stdin, process, stdin_file)
         if process.stdout is not None and stdout_logger is not None:
-            tg.start_soon(_receive_from_stdout, process, stdout_logger, error_regex)
+            tg.start_soon(
+                _receive_from_stdout,
+                process,
+                stdout_logger,
+                error_regex,
+                ready_regex,
+                task_status,
+            )
         # Wait for the process to exit normally
         await process.wait()
 
@@ -98,13 +111,20 @@ async def _send_to_stdin(process: Process, stdin_file: Path) -> None:
 
 
 async def _receive_from_stdout(
-    process: Process, stdout_logger: Logger, error_regex: Optional[str] = None
+    process: Process,
+    stdout_logger: Logger,
+    error_regex: Optional[str] = None,
+    ready_regex: Optional[str] = None,
+    task_status: TaskStatus = anyio.TASK_STATUS_IGNORED,
 ) -> None:
     assert process.stdout is not None
     # Compile regex
     error_pattern: Optional[Pattern[str]] = None
     if error_regex is not None:
         error_pattern = re.compile(error_regex)
+    ready_pattern: Optional[Pattern[str]] = None
+    if ready_regex is not None:
+        ready_pattern = re.compile(ready_regex)
     # Forward data from stdout to logger
     with DelimitedBuffer(stdout_logger.info) as logger_info:
         stream = TextReceiveStream(process.stdout)
@@ -115,3 +135,5 @@ async def _receive_from_stdout(
             # Use `DelimitedBuffer` or similar to get around this.
             if error_pattern is not None and error_pattern.search(string):
                 raise SubprocessError(string)
+            if ready_pattern is not None and ready_pattern.search(string):
+                task_status.started()

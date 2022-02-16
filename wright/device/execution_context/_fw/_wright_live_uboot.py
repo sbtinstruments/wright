@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from importlib import resources
 from logging import Logger
 from typing import TYPE_CHECKING, AsyncIterator, Optional
 
 import anyio
+from anyio.abc import TaskStatus
 
 from .... import openocd as ocd
 from ....command_line import SerialCommandLine
@@ -66,11 +67,11 @@ async def jtag_boot_to_uboot(device: "Device") -> None:
     """Boot directly to U-boot via JTAG."""
     _extract_files(logger=device.logger)
 
-    async with AsyncExitStack() as stack:
+    async with anyio.create_task_group() as tg:
         # OCD server
         device.logger.info("Start OpenOCD server")
         try:
-            await _start_server(stack, device.link.communication, logger=device.logger)
+            await tg.start(_start_server, device.link.communication, device.logger)
         except ocd.ServerError:
             device.logger.warning(
                 "Could not start OpenOCD server. We power cycle the "
@@ -82,28 +83,31 @@ async def jtag_boot_to_uboot(device: "Device") -> None:
             # TODO: Somehow add the time that it takes to do this "unexpected" extra
             # step to the overall timeout.
             device.logger.info("Start the OpenOCD server once more.")
-            await _start_server(stack, device.link.communication, logger=device.logger)
+            await tg.start(_start_server, device.link.communication, device.logger)
 
         # OCD client
         device.logger.info("Connect OpenOCD client")
-        ocd_client = ocd.Client(logger=device.logger.getChild("ocd.client"))
-        await stack.enter_async_context(ocd_client)
+        client_logger = device.logger.getChild("ocd.client")
+        client_port = device.link.communication.ocd_tcl_port
+        async with ocd.Client(port=client_port, logger=client_logger) as ocd_client:
+            # Low-level OCD control
+            device.logger.info("Reset and halt CPU")
+            await ocd_client.run("reset halt")
+            device.logger.info("Copy FSBL to device memory")
+            await ocd_client.run(f"load_image {_FSBL_FILE} 0 elf")
+            device.logger.info("Execute FSBL")
+            await ocd_client.run("resume 0")
+            await ocd_client.run("sleep 4000")
+            device.logger.info("Copy U-boot to device memory")
+            await ocd_client.run("halt")
+            await ocd_client.run(f"load_image {_UBOOT_FILE} 0x04000000 bin")
 
-        # Low-level OCD control
-        device.logger.info("Reset and halt CPU")
-        await ocd_client.run("reset halt")
-        device.logger.info("Copy FSBL to device memory")
-        await ocd_client.run(f"load_image {_FSBL_FILE} 0 elf")
-        device.logger.info("Execute FSBL")
-        await ocd_client.run("resume 0")
-        await ocd_client.run("sleep 4000")
-        device.logger.info("Copy U-boot to device memory")
-        await ocd_client.run("halt")
-        await ocd_client.run(f"load_image {_UBOOT_FILE} 0x04000000 bin")
+            # TODO: Call `Console.force_prompt` before we resume
+            device.logger.info("Execute U-boot")
+            await ocd_client.run("resume 0x04000000")
 
-        # TODO: Call `Console.force_prompt` before we resume
-        device.logger.info("Execute U-boot")
-        await ocd_client.run("resume 0x04000000")
+        # Stop the server
+        tg.cancel_scope.cancel()
 
 
 def _extract_files(*, logger: Logger) -> None:
@@ -130,7 +134,10 @@ def _extract_files(*, logger: Logger) -> None:
 
 
 async def _start_server(
-    stack: AsyncExitStack, communication: "DeviceCommunication", *, logger: Logger
+    communication: "DeviceCommunication",
+    logger: Logger,
+    *,
+    task_status: TaskStatus = anyio.TASK_STATUS_IGNORED
 ) -> None:
     # Commands that we run when the server runs
     commands: list[str] = []
@@ -143,11 +150,22 @@ async def _start_server(
         logger.info(
             "Use an arbitrary FTDI device (no specific serial number specified)"
         )
+    if communication.ocd_tcl_port is not None:
+        logger.info(
+            f'Use TCL port number: "{communication.ocd_tcl_port}"'
+        )
+        commands.append(f"tcl_port {communication.ocd_tcl_port}")
+    else:
+        logger.info(
+            "Use default TCL port number (no specific port number specified)"
+        )
     # Run the server
-    ocd_server = ocd.run_server_in_background(
-        _CFG_FILE, commands, logger=logger.getChild("ocd.server")
+    await ocd.run_server(
+        _CFG_FILE,
+        commands,
+        task_status=task_status,
+        logger=logger.getChild("ocd.server")
     )
-    await stack.enter_async_context(ocd_server)
 
 
 async def _power_cycle_usb_ports(*, logger: Optional[Logger] = None) -> None:

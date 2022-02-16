@@ -27,14 +27,17 @@ class Client:
         self,
         host: Optional[str] = None,
         *,
+        port: Optional[int] = None,
         logger: Optional[Logger] = None,
     ) -> None:
         if host is None:
             host = "localhost"
         if logger is None:
             logger = _LOGGER
+        if port is None:
+            port = 6666
         self._host = host
-        self._port = 6666
+        self._port = port
         self._logger: Logger = logger
         self._logger_info = DelimitedBuffer(self._logger.info)
         self._stream: Optional[SocketStream] = None
