@@ -37,6 +37,16 @@ def create_layout() -> list[Any]:
                 default_value=defaults.get("device_type"),
                 size=(30, None),
             ),
+        ]
+    ]
+
+    device_version_layout = [
+        [
+            sg.Input(
+                key="device_version",
+                default_text=defaults.get("device_version"),
+                size=(30, None),
+            ),
         ],
     ]
 
@@ -95,6 +105,7 @@ def create_layout() -> list[Any]:
     left_column_layout = [
         [sg.Frame("SWUpdate file", swu_layout)],
         [sg.Frame("Device", device_layout)],
+        [sg.Frame("Device version", device_version_layout)],
         [sg.Frame("Branding", branding_layout)],
         [sg.Frame("Hostname", hostname_layout)],
         [

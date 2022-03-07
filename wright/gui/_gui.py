@@ -32,13 +32,14 @@ from ..progress import (
     StatusStream,
 )
 from ._command_log import CommandLog, CommandStatus
-from ._config import GUI_CONFIG_PATH, COMMAND_LOG_PATH, LowLevelConfig
+from ._config import COMMAND_LOG_PATH, GUI_CONFIG_PATH, LowLevelConfig
 from ._layout import create_layout
 from ._logging import GuiFormatter, GuiHandler
 
 ResetParams = tuple[DeviceDescription, Path, Branding]
 
 _LOGGER = logging.getLogger()  # root logger
+
 
 class WindowEventLoop:
     """Event loop for the GUI."""
@@ -346,16 +347,20 @@ class WindowEventLoop:
             element.update(disabled=flag)
 
 
-def _get_parameters(low_level_config: LowLevelConfig, values: dict[str, Any]) -> ResetParams:
+def _get_parameters(
+    low_level_config: LowLevelConfig, values: dict[str, Any]
+) -> ResetParams:
     # SWU
     swu = Path(values["swu_file"])
     if not swu.is_file():
         raise ValueError(f"The SWU path {swu} is not a file")
     # Device description
     device_type = next(dt for dt in DeviceType if dt.name == values["device_type"])
+    device_version = values["device_version"]
     hostname = _get_hostname(values)
     desc = DeviceDescription.from_raw_args(
         device_type=device_type,
+        device_version=device_version,
         hostname=hostname,
         tty=low_level_config.tty,
         jtag_usb_serial=low_level_config.jtag_usb_serial,

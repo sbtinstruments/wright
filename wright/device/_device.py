@@ -19,6 +19,7 @@ class Device(AsyncContextManager["Device"]):
 
     def __init__(
         self,
+        version: str,
         link: DeviceLink,
         metadata: Optional[DeviceMetadata] = None,
         *,
@@ -27,6 +28,7 @@ class Device(AsyncContextManager["Device"]):
         # Defaults
         if metadata is None:
             metadata = DeviceMetadata()
+        self._version = version
         self._link = link
         # It's not the responsibility of this class to keep track of the metadata. It's
         # up to the user to manage the metadata. E.g., the current execution context
@@ -38,6 +40,11 @@ class Device(AsyncContextManager["Device"]):
         # Automatically determine the device type
         self._device_type = _get_device_type(self)
         self._logger = logger if logger is not None else _LOGGER
+
+    @property
+    def version(self) -> str:
+        """Return the version of this device."""
+        return self._version
 
     @property
     def link(self) -> DeviceLink:
@@ -79,7 +86,10 @@ class Device(AsyncContextManager["Device"]):
     def description(self) -> DeviceDescription:
         """Return description of this device."""
         return DeviceDescription(
-            device_type=self.device_type, link=self.link, metadata=self.metadata
+            device_type=self.device_type,
+            device_version=self._version,
+            link=self.link,
+            metadata=self.metadata,
         )
 
     @staticmethod
@@ -90,7 +100,12 @@ class Device(AsyncContextManager["Device"]):
             raise ValueError(
                 f'No device registered for type: "{description.device_type}"'
             )
-        return device_cls(description.link, description.metadata, **kwargs)
+        return device_cls(
+            description.device_version,
+            description.link,
+            description.metadata,
+            **kwargs,
+        )
 
 
 def _get_device_type(device: Device) -> DeviceType:

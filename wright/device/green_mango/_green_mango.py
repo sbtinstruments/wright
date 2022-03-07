@@ -23,12 +23,13 @@ class GreenMango(Device):
 
     def __init__(
         self,
+        version: str,
         link: DeviceLink,
         metadata: Optional[DeviceMetadata] = None,
         *,
         logger: Optional[Logger] = None,
     ) -> None:
-        super().__init__(link, metadata, logger=logger)
+        super().__init__(version, link, metadata, logger=logger)
         self._stack: Optional[AsyncExitStack] = None
         self._power_control = link.control.power
         self._boot_mode_control = link.control.boot_mode

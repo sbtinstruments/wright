@@ -65,6 +65,7 @@ async def reset_device(
         multi_bundle, config_image = await run_step(
             _prepare,
             device.device_type,
+            device.version,
             device.link.communication.hostname,
             bundle_or_swu,
             branding,
@@ -124,6 +125,7 @@ async def reset_device(
 
 async def _prepare(
     device_type: DeviceType,
+    device_version: str,
     hostname: str,
     bundle_or_swu: Union[MultiBundle, Path],
     branding: Branding,
@@ -143,6 +145,7 @@ async def _prepare(
     await create_config_image(
         config_image,
         device_type=device_type,
+        device_version=device_version,
         branding=branding,
         hostname=hostname,
         logger=logger.getChild("config"),

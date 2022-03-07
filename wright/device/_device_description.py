@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from re import compile, match
 from typing import Any, Optional
 
 from pydantic import validator
@@ -14,16 +15,26 @@ from .control import DeviceControl
 from .control.boot_mode import GpioBootModeControl
 from .control.power import RelayPowerControl
 
+_DEVICE_VERSION_REGEX = compile(r"[0-9][A-Za-z0-9-_.]+")
+
 
 class DeviceDescription(FrozenModel):
     """Identifies a specific device by its type and link to the host."""
 
     # Kind/class of the device
     device_type: DeviceType
+    # Version of the device
+    device_version: str
     # Connection to the device by which we can, e.g., turn it on and send data.
     link: DeviceLink
     # Metadata such as the device condition, firmware version, etc.
     metadata: DeviceMetadata = DeviceMetadata()
+
+    @validator("device_version")
+    def _version_is_valid(cls, value: str) -> str:  # pylint: disable=no-self-argument
+        if _DEVICE_VERSION_REGEX.fullmatch(value) is None:
+            raise ValueError("Invalid version string")
+        return value
 
     @validator("link")
     def _hostname_is_valid(  # pylint: disable=no-self-argument
@@ -41,6 +52,7 @@ class DeviceDescription(FrozenModel):
         cls,
         *,
         device_type: DeviceType,
+        device_version: str,
         hostname: str,
         tty: Optional[Path] = None,
         jtag_usb_serial: Optional[str] = None,
@@ -64,4 +76,8 @@ class DeviceDescription(FrozenModel):
             jtag_usb_serial=jtag_usb_serial,
         )
         link = DeviceLink(control=control, communication=communication)
-        return cls(device_type=device_type, link=link)
+        return cls(
+            device_type=device_type,
+            device_version=device_version,
+            link=link,
+        )

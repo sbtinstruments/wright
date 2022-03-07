@@ -28,6 +28,7 @@ _LOGGER.setLevel(logging.DEBUG)
 def create_config_image(
     dest: Path = typer.Argument(..., writable=True),
     device_type: DeviceType = typer.Option(..., envvar="WRIGHT_DEVICE_TYPE"),
+    device_version: str = typer.Option(..., envvar="WRIGHT_DEVICE_VERSION"),
     branding: Branding = typer.Option(..., envvar="WRIGHT_BRANDING"),
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
 ) -> None:
@@ -36,6 +37,7 @@ def create_config_image(
         config.create_config_image,
         dest,
         device_type=device_type,
+        device_version=device_version,
         branding=branding,
         hostname=hostname,
     )
@@ -47,6 +49,7 @@ def reset_device(
     swu: Path = typer.Argument(..., exists=True, readable=True),
     *,
     device_type: DeviceType = typer.Option(..., envvar="WRIGHT_DEVICE_TYPE"),
+    device_version: str = typer.Option(..., envvar="WRIGHT_DEVICE_VERSION"),
     branding: Branding = typer.Option(..., envvar="WRIGHT_BRANDING"),
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
     tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
@@ -59,6 +62,7 @@ def reset_device(
     # Device description (translate CLI args)
     description = DeviceDescription.from_raw_args(
         device_type=device_type,
+        device_version=device_version,
         hostname=hostname,
         tty=tty,
         jtag_usb_serial=jtag_usb_serial,
@@ -84,6 +88,7 @@ def run(
     command: str,
     *,
     device_type: DeviceType = typer.Option(..., envvar="WRIGHT_DEVICE_TYPE"),
+    device_version: str = typer.Option(..., envvar="WRIGHT_DEVICE_VERSION"),
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
     tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
     jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_SERIAL"),
@@ -94,6 +99,7 @@ def run(
     # Device description (translate CLI args)
     description = DeviceDescription.from_raw_args(
         device_type=device_type,
+        device_version=device_version,
         hostname=hostname,
         tty=tty,
         jtag_usb_serial=jtag_usb_serial,
