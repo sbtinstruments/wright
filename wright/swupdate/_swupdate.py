@@ -4,6 +4,7 @@ from logging import Logger
 from pathlib import Path
 from typing import Any, Optional
 from zlib import crc32
+import gzip
 
 import libconf
 
@@ -104,9 +105,7 @@ def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
     raw_device_bundles: dict[str, dict[str, DiskImage]] = {
         device_type: {
             # Convert, e.g., "operating-system" to "operating_system"
-            image["name"].replace("-", "_"): DiskImage(
-                file=swu_dir / image["filename"], version=image["version"]
-            )
+            image["name"].replace("-", "_"): _parse_and_decompress_image(image, swu_dir)
             # This assumes a dual-copy strategy
             for image in description["stable"]["system0"]["images"]
         }
@@ -117,6 +116,26 @@ def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
         device_type: DeviceBundle(**raw_device_bundle)
         for device_type, raw_device_bundle in raw_device_bundles.items()
     }
+
+
+def _parse_and_decompress_image(image: dict[str, str], dir: Path) -> DiskImage:
+    """
+    Create a DiskImage.
+
+
+    As a side-effect, if the file is compressed,
+    decompress and point to the decompressed file.
+    """
+    filename = image["filename"]
+    filepath = dir / Path(filename)
+    if filename.endswith(".gz"):
+        uncompressed_filepath: Path = (dir / Path(filename)).with_suffix("")
+        with gzip.open(dir / filename, "rb") as fin:
+            with uncompressed_filepath.open(mode="wb") as fout:
+                fout.write(fin.read())
+        return DiskImage(file=uncompressed_filepath, version=image["version"])
+
+    return DiskImage(file=filepath, version=image["version"])
 
 
 def store_checksum(swu: Path, checksum_file: Path) -> None:
