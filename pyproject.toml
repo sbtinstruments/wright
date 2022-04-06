@@ -9,13 +9,15 @@ name = "wright"
 version = "0.1.0"
 
 [tool.poetry.dependencies]
-PySimpleGUI = {version = "^4.38.0", optional = true}
+PyQt5 = {version = "^5.15.5", optional = true}
+qasync = {version = "^0.22.0", optional = true}
+QtAwesome = {version = "^1.1.1", optional = true}
 "RPi.GPIO" = "^0.7.0"
 anyio = "^3.1"
 anyio-serial = "^0.1.5"
 cryptography = "^3.4.6"
 py3tftp = "^1.2.3"
-pydantic = "^1.8.1"
+pydantic = "^1.9.0"
 python = "^3.9"
 smbus2 = "^0.4.1"
 typer = "^0.3.2"
@@ -31,7 +33,7 @@ pylint = "^2.7.4"
 rope = "^0.18.0"
 
 [tool.poetry.extras]
-"gui" = ["PySimpleGUI"]
+"gui" = ["PyQt5", "qasync", "QtAwesome"]
 
 [tool.poetry.scripts]
 shipyard-gui = 'wright.gui:gui'

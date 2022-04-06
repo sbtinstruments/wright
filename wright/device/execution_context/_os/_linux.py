@@ -75,4 +75,4 @@ class Linux(SerialBase, ABC):
 
 
 def _py_code_to_command(py_code: str) -> str:
-    return f'python3 -c "{py_code}"'
+    return f'python3 << "EOF"\n{py_code}\nEOF'

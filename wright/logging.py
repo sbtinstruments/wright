@@ -7,3 +7,5 @@ def set_logging_defaults() -> None:
     logging.basicConfig(level=logging.DEBUG)
     # Silence tftpy a bit
     logging.getLogger("tftpy").setLevel(level=logging.INFO)
+    # Matplotlib is very spammy in debug mode
+    logging.getLogger("matplotlib").setLevel(level=logging.INFO)

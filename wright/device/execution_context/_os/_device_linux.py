@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, AsyncIterator, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 
 import anyio
 from anyio.abc import TaskGroup
 
 from ....command_line import CommandLine, SerialCommandLine, SshCommandLine
-from ....model import FrozenModel
 from ..._device_condition import DeviceCondition
+from ...models import BbpState, FrequencySweep, PartialBbpStatus, Process
 from .._deteriorate import deteriorate
 from .._enter_context import enter_context
 from .._fw import DeviceUboot
@@ -97,6 +99,57 @@ class DeviceLinux(Linux):
         # that the latter is ready yet.
         return await self.serial.run("cat /etc/ssh/ssh_host_ed25519_key.pub")
 
+    @deteriorate(DeviceCondition.AS_NEW)
+    async def set_electronics_reference(self) -> FrequencySweep:
+        """Set the electronics reference data (JSON file).
+
+        Returns the reference data (parsed contents of the JSON file).
+        """
+        await self._start_bbp(program_name="electronics_reference.bbp")
+        with anyio.fail_after(60):
+            await self._wait_for_bbp()
+        elec_ref_data = await self.read_file_as_json(
+            Path("/media/config/individual/etc/electrical_test_reference.json")
+        )
+        return FrequencySweep.from_elec_ref_data(elec_ref_data)
+
+    async def read_file_as_json(self, file: Path, **kwargs: Any) -> dict[str, Any]:
+        """Read the given file and parse the contents as JSON."""
+        text = await self.read_file_as_text(file)
+        result = json.loads(text, **kwargs)
+        assert isinstance(result, dict)
+        return result
+
+    @deteriorate(DeviceCondition.AS_NEW)
+    async def read_file_as_text(self, file: Path) -> str:
+        """Read the given file and return its contents as a raw text string."""
+        return await self.run(f"cat {file}")
+
+    async def _wait_for_bbp(self) -> None:
+        """Wait until the BBP is done.
+
+        Raises `RuntimeError` if the BBP failed or was cancelled.
+        """
+        while True:
+            status = await self.run_py_parsed(_GET_BBP_STATUS, PartialBbpStatus)
+            bbp_state = status.state
+            if bbp_state is BbpState.CANCELLED:
+                raise RuntimeError("User cancelled the BBP")
+            if bbp_state is BbpState.FAILED:
+                raise RuntimeError("The BBP failed")
+            if bbp_state is BbpState.COMPLETED:
+                break
+            await anyio.sleep(2)
+
+    async def _start_bbp(self, program_name: str) -> None:
+        """Start the given BBP.
+
+        Note that this simply starts the BBP in the background. It does not wait
+        for it to complete.
+        """
+        py_code = _RUN_BBP.format(program_name=program_name)
+        await self.run_py(py_code)
+
     async def _boot(self) -> None:
         # We assume that the device uses U-boot and sbtOS. This way, we know how to
         # enter Linux.
@@ -132,7 +185,7 @@ class DeviceLinux(Linux):
                 with anyio.fail_after(80):
                     # The authentication is at the default values
                     await force_log_in_over_serial(serial, username="root", password="")
-            # Spam 'echo' commands until the serial prompt appears
+            # Spam `echo` commands until the serial prompt appears
             with anyio.fail_after(160):
                 await serial.force_prompt()
             yield serial
@@ -142,18 +195,16 @@ class DeviceLinux(Linux):
         assert self._stack is not None
         host = self.device.link.communication.hostname
         host_key = await self.get_host_key()
+        # Logger
+        if self.logger is None:
+            ssh_logger = None
+        else:
+            ssh_logger = self.logger.getChild("ssh")
         self._ssh = SshCommandLine(
-            host=host, port=7910, host_key=host_key, username="root"
+            host=host, port=7910, host_key=host_key, username="root", logger=ssh_logger
         )
         await self._stack.enter_async_context(self._ssh)
         return self
-
-
-class Process(FrozenModel):
-    """Process summary as given back by `psutil`."""
-
-    name: str
-    cmdline: tuple[str, ...]
 
 
 _PY_PRINT_PROCESSES = """
@@ -161,9 +212,51 @@ import psutil
 import json
 
 processes = {
-    p.pid: p.as_dict(attrs=['name', 'cmdline'])
+    p.pid: p.as_dict(attrs=["name", "cmdline"])
     for p in psutil.process_iter()
 }
 
 print(json.dumps(processes))
+"""
+
+
+_RUN_BBP = """
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+
+# Discard previous program (if any)
+req = Request(
+    url="http://localhost:8082/tasks/program",
+    method="DELETE"
+)
+try:
+    with urlopen(req):
+        pass
+except HTTPError as exc:
+    # Discard 404 errors (no previous program)
+    if exc.code != 404:
+        raise
+
+# Start next program
+req = Request(
+    url="http://localhost:8082/tasks/program",
+    data="{program_name}".encode("utf-8"),
+    method="PUT"
+)
+with urlopen(req):
+    pass
+"""
+
+_GET_BBP_STATUS = """
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+
+req = Request(
+    url="http://localhost:8082/tasks/program",
+    method="GET"
+)
+with urlopen(req) as io:
+    data = io.read()
+
+print(data.decode("utf-8"))
 """

@@ -54,6 +54,7 @@ class ProgressManager(AsyncContextManager["ProgressManager"]):
         if not isinstance(status, Idle):
             raise RuntimeError('Can only skip from the "Idle" status.')
         self._status_map = {**self._status_map, name: status.skip()}
+        await self._send_status_update()
 
     async def _run(self, name: str) -> None:
         status = self._status_map[name]

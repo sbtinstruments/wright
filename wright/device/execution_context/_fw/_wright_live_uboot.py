@@ -73,12 +73,24 @@ async def jtag_boot_to_uboot(device: "Device") -> None:
         try:
             await tg.start(_start_server, device.link.communication, device.logger)
         except ocd.ServerError:
-            device.logger.warning(
-                "Could not start OpenOCD server. We power cycle the "
-                "USB port to reset the JTAG cable. Usually, this fixes the issues."
-            )
+            device.logger.warning("Could not start OpenOCD server.")
+            # Early out if we don't have enough info to cycle power to the USB port
+            if device.link.communication.jtag_usb_serial is None:
+                device.logger.warning(
+                    "At this point, we usually try to cycle power to the USB port "
+                    "to reset the JTAG cable. We can't do this now, since we don't "
+                    "have the JTAG cable serial number."
+                )
+                raise
             # Cycle power to USB ports
-            await _power_cycle_usb_ports(logger=device.logger.getChild("usb"))
+            device.logger.info(
+                "We power cycle the USB port to reset the JTAG cable. "
+                "Usually, this fixes the issues."
+            )
+            await _power_cycle_usb_ports(
+                logger=device.logger.getChild("usb"),
+                search=device.link.communication.jtag_usb_serial,
+            )
             # Try to start the server once more.
             # TODO: Somehow add the time that it takes to do this "unexpected" extra
             # step to the overall timeout.
@@ -137,7 +149,7 @@ async def _start_server(
     communication: "DeviceCommunication",
     logger: Logger,
     *,
-    task_status: TaskStatus = anyio.TASK_STATUS_IGNORED
+    task_status: TaskStatus = anyio.TASK_STATUS_IGNORED,
 ) -> None:
     # Commands that we run when the server runs
     commands: list[str] = []
@@ -151,26 +163,30 @@ async def _start_server(
             "Use an arbitrary FTDI device (no specific serial number specified)"
         )
     if communication.ocd_tcl_port is not None:
-        logger.info(
-            f'Use TCL port number: "{communication.ocd_tcl_port}"'
-        )
+        logger.info(f'Use TCL port number: "{communication.ocd_tcl_port}"')
         commands.append(f"tcl_port {communication.ocd_tcl_port}")
     else:
-        logger.info(
-            "Use default TCL port number (no specific port number specified)"
-        )
+        logger.info("Use default TCL port number (no specific port number specified)")
     # Run the server
     await ocd.run_server(
         _CFG_FILE,
         commands,
         task_status=task_status,
-        logger=logger.getChild("ocd.server")
+        logger=logger.getChild("ocd.server"),
     )
 
 
-async def _power_cycle_usb_ports(*, logger: Optional[Logger] = None) -> None:
-    # TODO: Power cycle a specific USB port instead of all of them
-    command = "uhubctl", "--action", "cycle"
+async def _power_cycle_usb_ports(
+    *,
+    logger: Optional[Logger] = None,
+    location: Optional[str] = None,
+    search: Optional[str] = None,
+) -> None:
+    command = ["uhubctl", "--action", "cycle"]
+    if location is not None:
+        command += ("--location", location)
+    if search is not None:
+        command += ("--search", search)
     await run_process(command, check_rc=True, stdout_logger=logger)
     # Wait a moment for the USB devices to set themselves up
     await anyio.sleep(2)

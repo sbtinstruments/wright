@@ -5,9 +5,9 @@ import anyio
 
 from .._device import Device
 from ..execution_context import (
-    WrightLiveUboot,
     DeviceUboot,
     WrightLiveLinux,
+    WrightLiveUboot,
     enter_context,
 )
 
@@ -26,7 +26,7 @@ async def reset_firmware(device: Device, firmware_image: Path) -> None:
 
 async def reset_operating_system(device: Device, operating_system_image: Path) -> None:
     """Remove any existing operating system and write the given images to the device."""
-    with anyio.fail_after(80):
+    with anyio.fail_after(100):
         async with enter_context(DeviceUboot, device) as uboot:
             await uboot.partition_mmc()
             # We must power-cycle the device so that U-boot recognizes the
@@ -44,7 +44,7 @@ async def reset_operating_system(device: Device, operating_system_image: Path) -
 
 async def reset_config(device: Device, config_image: Path) -> None:
     """Remove any existing config and write the given images to the device."""
-    with anyio.fail_after(40):
+    with anyio.fail_after(60):
         async with enter_context(DeviceUboot, device) as uboot:
             # There is a single copy of the config image
             await uboot.write_image_to_mmc(config_image, uboot.mmc.config)

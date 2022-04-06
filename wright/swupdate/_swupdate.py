@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import gzip
 from logging import Logger
 from pathlib import Path
 from typing import Any, Optional
 from zlib import crc32
-import gzip
 
 import libconf
+from anyio.to_thread import run_sync
 
 from ..model import FrozenModel
 from ..subprocess import run_process
@@ -67,7 +68,7 @@ class MultiBundle(FrozenModel):
             await extract_swu(swu, swu_dir, logger=logger)
             store_checksum(swu, checksum_file)
         # Get device bundles
-        device_bundles = get_device_bundles(sw_description_file)
+        device_bundles = await get_device_bundles(sw_description_file)
         # Get checksum
         checksum = checksum_file.read_text()
         return cls(checksum=checksum, device_bundles=device_bundles)
@@ -84,7 +85,7 @@ async def extract_swu(
     )
 
 
-def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
+async def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
     """Get firmware and operating system dvice bundles from the description file."""
     swu_dir = sw_description_file.parent
     # Load in the libconfig-encoded description file
@@ -102,15 +103,21 @@ def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
         if "stable" in description
     }
     # Convert from the description structure to our own bundle structure
-    raw_device_bundles: dict[str, dict[str, DiskImage]] = {
-        device_type: {
+    raw_device_bundles: dict[str, dict[str, DiskImage]] = {}
+    # We would like to use two nested dict comprehensions. Unfortunately,
+    # that is not possible since the inner comprehension is async.
+    # See: https://stackoverflow.com/a/60042806/554283
+    for device_type, description in device_descriptions.items():
+        raw_device_bundles[device_type] = {
             # Convert, e.g., "operating-system" to "operating_system"
-            image["name"].replace("-", "_"): _parse_and_decompress_image(image, swu_dir)
+            # TODO: Move the expensive `decompress` step into the `extract_swu` funciton.
+            # This way, we cache the result so that we don't have to redo it.
+            image["name"].replace("-", "_"): await run_sync(
+                _parse_and_decompress_image, image, swu_dir, cancellable=True
+            )
             # This assumes a dual-copy strategy
             for image in description["stable"]["system0"]["images"]
         }
-        for device_type, description in device_descriptions.items()
-    }
     # Finally, convert the raw dicts into `DeviceBundle` instances
     return {
         device_type: DeviceBundle(**raw_device_bundle)
@@ -118,7 +125,7 @@ def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
     }
 
 
-def _parse_and_decompress_image(image: dict[str, str], dir: Path) -> DiskImage:
+def _parse_and_decompress_image(image: dict[str, str], directory: Path) -> DiskImage:
     """
     Create a DiskImage.
 
@@ -127,10 +134,10 @@ def _parse_and_decompress_image(image: dict[str, str], dir: Path) -> DiskImage:
     decompress and point to the decompressed file.
     """
     filename = image["filename"]
-    filepath = dir / Path(filename)
+    filepath = directory / Path(filename)
     if filename.endswith(".gz"):
-        uncompressed_filepath: Path = (dir / Path(filename)).with_suffix("")
-        with gzip.open(dir / filename, "rb") as fin:
+        uncompressed_filepath: Path = (directory / Path(filename)).with_suffix("")
+        with gzip.open(directory / filename, "rb") as fin:
             with uncompressed_filepath.open(mode="wb") as fout:
                 fout.write(fin.read())
         return DiskImage(file=uncompressed_filepath, version=image["version"])

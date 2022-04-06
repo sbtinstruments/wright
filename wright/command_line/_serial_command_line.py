@@ -86,13 +86,14 @@ class SerialCommandLine(CommandLine):
             try:
                 # Use a small timeout so that we really do spam the
                 # line and are able to interrupt a boot process.
-                with anyio.fail_after(0.1):
+                with anyio.fail_after(0.5):
                     resp = await self.run(f"echo {i}")
             except (RuntimeError, TimeoutError):
                 # If the command fails we simply try again
                 continue
             # If we get an invalid response, we try again.
             if resp != str(i):
+                self._logger.debug(f'Invalid response: "{resp}" != {str(i)}')
                 continue
             # If we got this far, we have successfully entered a command
             # and recieved the appropriate response. This means that we
