@@ -6,6 +6,8 @@ from ..device import Device
 from ..device.execution_context import DeviceLinux, enter_context
 from ..device.models import FrequencySweep
 from ..progress import Idle, ProgressManager, StatusMap
+from ._power_off_on_error import power_off_on_error
+from ._step import StepSettings, run_step
 
 _LOGGER = getLogger(__name__)
 
@@ -19,13 +21,25 @@ SET_ELECTRONICS_REFERENCE_STATUS_MAP: StatusMap = {
 async def set_electronics_reference(
     device: Device,
     progress_manager: ProgressManager,
+    *,
+    settings: Optional[StepSettings] = None,
     logger: Optional[Logger] = None,
-) -> FrequencySweep:
+) -> Optional[FrequencySweep]:
     """Set electronics reference data and return said data."""
     # Defaults
+    if settings is None:
+        settings = StepSettings()
     if logger is None:
         logger = _LOGGER
 
-    async with progress_manager.step("set_electronics_reference"):
-        async with enter_context(DeviceLinux, device) as linux:
-            return await linux.set_electronics_reference()
+    return await run_step(
+        power_off_on_error(_set_electronics_reference, device),
+        progress_manager=progress_manager,
+        settings=settings,
+        logger=logger,
+    )
+
+
+async def _set_electronics_reference(device: Device) -> FrequencySweep:
+    async with enter_context(DeviceLinux, device) as linux:
+        return await linux.set_electronics_reference()

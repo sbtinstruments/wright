@@ -179,7 +179,7 @@ class MainWidget(QWidget):
                     device = Device.from_description(
                         reset_params.device_description, logger=_LOGGER
                     )
-                    async with device:
+                    async with device, progress_manager:
                         await reset_device(
                             device,
                             reset_params.swu_file,
@@ -192,8 +192,12 @@ class MainWidget(QWidget):
                             source_data = await set_electronics_reference(
                                 device,
                                 progress_manager=progress_manager,
+                                settings=run_plan.steps.set_electronics_reference_settings,
                                 logger=_LOGGER,
                             )
+                            assert (
+                                source_data is not None
+                            ), "When the step is enabled, we get a result"
                             elec_ref = ElecRef(source_data=source_data)
                             elec_ref = await elec_ref.generate_image(
                                 device_type=run_plan.parameters.device_type

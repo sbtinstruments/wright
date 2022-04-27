@@ -48,13 +48,12 @@ async def reset_device(
         logger = _LOGGER
 
     start = datetime.now()
-
-    if progress_manager is None:
-        progress_manager = ProgressManager(
-            RESET_DEVICE_STATUS_MAP, status_stream=progress_stream
-        )
     async with AsyncExitStack() as stack:
-        await stack.enter_async_context(progress_manager)
+        if progress_manager is None:
+            progress_manager = ProgressManager(
+                RESET_DEVICE_STATUS_MAP, status_stream=progress_stream
+            )
+            await stack.enter_async_context(progress_manager)
 
         # Device and it's description
         if isinstance(device_or_desc, DeviceDescription):

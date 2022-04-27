@@ -12,6 +12,10 @@ class RunSteps(FrozenModel):
     set_electronics_reference: bool = True
 
     @property
+    def set_electronics_reference_settings(self) -> StepSettings:
+        return StepSettings(self.set_electronics_reference, 10)
+
+    @property
     def reset_device_settings(self) -> ResetDeviceSettings:
         return ResetDeviceSettings(
             StepSettings(self.reset_firmware, 10),
