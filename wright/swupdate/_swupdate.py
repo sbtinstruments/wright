@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 from zlib import crc32
 
+import anyio
 import libconf
 from anyio.to_thread import run_sync
 
@@ -66,6 +67,7 @@ class MultiBundle(FrozenModel):
         # existing record.
         if not swu_dir.exists():
             await extract_swu(swu, swu_dir, logger=logger)
+            await decompress_files(swu_dir, logger=logger)
             store_checksum(swu, checksum_file)
         # Get device bundles
         device_bundles = await get_device_bundles(sw_description_file)
@@ -83,6 +85,49 @@ async def extract_swu(
     await run_process(
         command, stdin_file=swu, stdout_logger=logger, cwd=dest_dir.absolute()
     )
+
+
+async def decompress_files(
+    directory: Path,
+    *,
+    chunk_size: Optional[int] = None,
+    logger: Optional[Logger] = None,
+) -> None:
+    """Decompress all `.gz` files in the given directory (if any).
+
+    Does not recurse into subfolders.
+
+    This creates a new file next to the compressed file.
+    """
+    if chunk_size is None:
+        chunk_size = 2 ** 20  # 1 MiB
+    gz_files = (gz_file for gz_file in directory.glob("*.gz") if gz_file.is_file())
+    async with anyio.create_task_group() as tg:
+        for gz_file in gz_files:
+            if logger is not None:
+                logger.debug(f"Decompress {gz_file}")
+            tg.start_soon(_decompress_file, gz_file, chunk_size, logger)
+
+
+async def _decompress_file(*args: Any) -> None:
+    await run_sync(_decompress_file, *args)
+
+
+def _decompress_file_sync(
+    gz_file: Path,
+    chunk_size: int,
+    logger: Logger,
+) -> None:
+    uncompressed = gz_file.with_suffix("")
+    logger.debug(f"{uncompressed=}")
+    if uncompressed.exists():
+        logger.warning(
+            f"The file {uncompressed} already exists. "
+            f"We override it with the decompressed contents of {gz_file}."
+        )
+    with gzip.open(gz_file, "rb") as io_in, uncompressed.open(mode="wb") as io_out:
+        while chunk := io_in.read(chunk_size):
+            io_out.write(chunk)
 
 
 async def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
@@ -110,10 +155,8 @@ async def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundl
     for device_type, description in device_descriptions.items():
         raw_device_bundles[device_type] = {
             # Convert, e.g., "operating-system" to "operating_system"
-            # TODO: Move the expensive `decompress` step into the `extract_swu` funciton.
-            # This way, we cache the result so that we don't have to redo it.
             image["name"].replace("-", "_"): await run_sync(
-                _parse_and_decompress_image, image, swu_dir, cancellable=True
+                _parse_image, image, swu_dir, cancellable=True
             )
             # This assumes a dual-copy strategy
             for image in description["stable"]["system0"]["images"]
@@ -125,24 +168,17 @@ async def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundl
     }
 
 
-def _parse_and_decompress_image(image: dict[str, str], directory: Path) -> DiskImage:
-    """
-    Create a DiskImage.
-
-
-    As a side-effect, if the file is compressed,
-    decompress and point to the decompressed file.
-    """
+def _parse_image(image: dict[str, str], directory: Path) -> DiskImage:
+    """Create a `DiskImage` based on the given image dict."""
     filename = image["filename"]
-    filepath = directory / Path(filename)
-    if filename.endswith(".gz"):
-        uncompressed_filepath: Path = (directory / Path(filename)).with_suffix("")
-        with gzip.open(directory / filename, "rb") as fin:
-            with uncompressed_filepath.open(mode="wb") as fout:
-                fout.write(fin.read())
-        return DiskImage(file=uncompressed_filepath, version=image["version"])
-
-    return DiskImage(file=filepath, version=image["version"])
+    file = directory / filename
+    # If there is a decompressed version of the file, prefer that over the
+    # compressed version.
+    if file.suffix == ".gz":
+        uncompressed = file.with_suffix("")
+        if uncompressed.is_file():
+            file = uncompressed
+    return DiskImage(file=file, version=image["version"])
 
 
 def store_checksum(swu: Path, checksum_file: Path) -> None:
