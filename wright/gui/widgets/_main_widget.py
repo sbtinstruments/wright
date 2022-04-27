@@ -61,7 +61,7 @@ class MainWidget(QWidget):
         self._layout.addWidget(self._outcome_widget, 0, 2)
 
         self._start_run_button = QPushButton(self)
-        self._start_run_button.setText("Start run...")
+        self._start_run_button.setText("Begin...")
         self._start_run_button.setMinimumHeight(170)
         self._start_run_button.setStyleSheet("background: blue;")
         self._layout.addWidget(self._start_run_button, 1, 0)
@@ -263,6 +263,8 @@ class MainWidget(QWidget):
         if last_partial_run is not None:
             try:
                 last_run = Run.from_partial_run(last_partial_run)
+                # Always "check" all the step fields
+                last_run = last_run.with_default_steps()
                 # Increment hostname if the run completed (no cancellation or errors).
                 if last_run.status.overall is OverallStatus.COMPLETED:
                     last_run = last_run.with_next_hostname()

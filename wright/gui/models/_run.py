@@ -86,3 +86,6 @@ class Run(FrozenModel):
 
     def with_next_hostname(self) -> Run:
         return self.update(plan=self.plan.with_next_hostname())
+
+    def with_default_steps(self) -> Run:
+        return self.update(plan=self.plan.with_default_steps())
