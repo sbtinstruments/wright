@@ -101,7 +101,11 @@ class MainWidget(QWidget):
         self._tg.cancel_scope.cancel()  # TODO: Consider to move this to a higher level
 
     def _show_run(self, partial_run: PartialRun) -> None:
-        run = Run.from_partial_run(partial_run)
+        try:
+            run = Run.from_partial_run(partial_run)
+        except ValueError as exc:
+            _LOGGER.warning(f"Could not parse run: {exc}")
+            return
         self._run_plan_widget.setRunPlan(run.plan)
         self._outcome_widget.setLogHtml(run.log)
         self._outcome_widget.setElecRef(run.elec_ref)

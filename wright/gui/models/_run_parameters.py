@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-
-from pydantic import FilePath
+from pathlib import Path
 
 from ...config.branding import Branding
 from ...device import DeviceDescription, DeviceType
@@ -15,7 +14,7 @@ class RunParameters(FrozenModel):
     device_type: DeviceType
     device_version: str
     hostname: str
-    swu_file: FilePath
+    swu_file: Path
     branding: Branding
 
     @property

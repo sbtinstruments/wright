@@ -71,9 +71,13 @@ class StartRunDialog(QDialog):
 
     def _validate(self) -> None:
         try:
-            # Try to construct the reset paramaeters. This exercises the deepest
+            model = self.model()
+            # Try to construct the reset parameters. This exercises the deepest
             # validation chain.
-            self.model().parameters.reset_params
+            model.parameters.reset_params
+            # Make sure that the files exist
+            if not model.parameters.swu_file.is_file():
+                raise ValueError("SWU path does not point a file that exists")
         except ValueError as exc:
             message = str(exc)
             # Only update on changes. This avoids selection reset.
