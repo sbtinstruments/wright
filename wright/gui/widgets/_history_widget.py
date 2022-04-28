@@ -25,14 +25,17 @@ class HistoryWidget(QWidget):
         super().__init__(parent)
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
+        self.setMinimumWidth(250)
 
         self._table = QTableWidget(self)
-        self._table.setColumnCount(1)
-        self._table.setHorizontalHeaderLabels(("Done at",))
+        self._table.setColumnCount(2)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._table.setHorizontalHeaderLabels(("Done at", "Hostname"))
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Fixed
         )
+        self._table.setColumnWidth(0, 140)
         self._table.verticalHeader().hide()
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -63,8 +66,15 @@ class HistoryWidget(QWidget):
         partial_runs = sorted(partial_runs, key=lambda pr: pr.done_at)
         self._table.setRowCount(len(partial_runs))
         for row, partial_run in enumerate(partial_runs):
-            item = _partial_run_to_item(partial_run)
-            self._table.setItem(row, 0, item)
+            # Done at
+            done_at = partial_run.done_at.strftime("%Y-%M-%d %H:%m:%S")
+            done_at_item = QTableWidgetItem(done_at)
+            _set_item_details(done_at_item, partial_run)
+            self._table.setItem(row, 0, done_at_item)
+            # Hostname
+            hostname_item = QTableWidgetItem(partial_run.plan.parameters.hostname)
+            _set_item_details(hostname_item, partial_run)
+            self._table.setItem(row, 1, hostname_item)
         # Wait 0.1 seconds before we scroll. Otherwise, it doesn't actually
         # scroll to the bottom. Maybe the scroll happens before the UI
         # refreshes?
@@ -85,8 +95,7 @@ class HistoryWidget(QWidget):
                 )
 
 
-def _partial_run_to_item(partial_run: PartialRun) -> QTableWidgetItem:
-    item = QTableWidgetItem(f"{partial_run.done_at}")
+def _set_item_details(item: QTableWidgetItem, partial_run: PartialRun) -> None:
     item.setFlags(Qt.ItemFlag.ItemIsEnabled)
     item.setData(Qt.ItemDataRole.UserRole, partial_run)
     # Set background color
@@ -97,4 +106,3 @@ def _partial_run_to_item(partial_run: PartialRun) -> QTableWidgetItem:
         background_color = Qt.GlobalColor.red
     if background_color is not None:
         item.setBackground(background_color)
-    return item

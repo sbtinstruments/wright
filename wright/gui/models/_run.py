@@ -19,6 +19,7 @@ _LOG_FILE_NAME = "log.html"
 class PartialRun(FrozenModel):
     directory: Path
     status: RunStatus
+    plan: RunPlan
 
     @property
     def done_at(self) -> datetime:
@@ -32,7 +33,10 @@ class PartialRun(FrozenModel):
         # Status map
         status_file = run_dir / _STATUS_FILE_NAME
         status = RunStatus.parse_file(status_file)
-        return cls(directory=run_dir, status=status)
+        # Plan
+        plan_file = run_dir / _PLAN_FILE_NAME
+        plan = RunPlan.parse_file(plan_file)
+        return cls(directory=run_dir, status=status, plan=plan)
 
 
 class Run(FrozenModel):
@@ -44,9 +48,6 @@ class Run(FrozenModel):
 
     @classmethod
     def from_partial_run(cls, partial_run: PartialRun) -> Run:
-        # Plan
-        plan_file = partial_run.directory / _PLAN_FILE_NAME
-        plan = RunPlan.parse_file(plan_file)
         # Log
         log_file = partial_run.directory / _LOG_FILE_NAME
         log = log_file.read_text()
@@ -59,7 +60,7 @@ class Run(FrozenModel):
         # Construct instance
         return cls(
             status=partial_run.status,
-            plan=plan,
+            plan=partial_run.plan,
             log=log,
             elec_ref=elec_ref,
             done_at=partial_run.done_at,
