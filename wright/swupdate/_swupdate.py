@@ -110,7 +110,7 @@ async def decompress_files(
 
 
 async def _decompress_file(*args: Any) -> None:
-    await run_sync(_decompress_file, *args)
+    await run_sync(_decompress_file_sync, *args)
 
 
 def _decompress_file_sync(
@@ -119,7 +119,6 @@ def _decompress_file_sync(
     logger: Logger,
 ) -> None:
     uncompressed = gz_file.with_suffix("")
-    logger.debug(f"{uncompressed=}")
     if uncompressed.exists():
         logger.warning(
             f"The file {uncompressed} already exists. "
