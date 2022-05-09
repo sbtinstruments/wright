@@ -18,7 +18,7 @@ async def force_log_in_over_serial(
     serial._prompt = "login:"
     while True:
         await serial.write_line("")
-        async with move_on_after(0.1):
+        async with move_on_after(0.5):
             await serial.wait_for_prompt()
             break
     await log_in_over_serial(serial, **kwargs)
