@@ -13,6 +13,7 @@ command-log.csv
 experimental_console.py
 stress.sh
 test.py
+experiments/*
 
 # IDE settings
 /.vscode
