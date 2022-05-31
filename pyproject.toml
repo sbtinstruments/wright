@@ -27,7 +27,7 @@ libconf = "^2.0.1"
 asyncssh = "^2.7.2"
 
 [tool.poetry.dev-dependencies]
-black = "^20.8b1"
+black = "^21.10b0"
 isort = "^5.8.0"
 mypy = "^0.812"
 pydocstyle = "^6.0.0"
