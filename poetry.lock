@@ -604,12 +604,12 @@ optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 
 [extras]
-gui = ["PyQt5", "qasync", "QtAwesome", "matplotlib", "numpy"]
+gui = ["PyQt5", "qasync", "QtAwesome", "matplotlib"]
 
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "92dba3652589c4aad73b95ea70a4d0c04336807b6a244a7deaf9d19f73820ae4"
+content-hash = "956af9cf091e4ff4fd437bc4e03ad6f1d3e9f87ca6b3ac94c70037f82ee03397"
 
 [metadata.files]
 anyio = [
