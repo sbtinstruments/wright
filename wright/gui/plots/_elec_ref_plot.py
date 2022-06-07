@@ -1,15 +1,13 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 
-from ...device import DeviceType
-from ...device.models import FrequencySweep
+from ...device.models import SignalIntegrityTest
 
-
+# TODO: visualizing is not terminated
 class ElecRefPlot:
-    def __init__(self, frequency_sweep: FrequencySweep, device_type: DeviceType):
-        self._frequency_sweep = frequency_sweep
+    def __init__(self, si_test: SignalIntegrityTest):
+        self._frequency_sweep = si_test.source_data
 
         fig, axs = plt.subplots(1, 2, sharey=True, figsize=(12, 6))
         fig.suptitle("Electronics reference (v3)")
@@ -25,38 +23,57 @@ class ElecRefPlot:
         axs[1].set_title("Site 1")
 
         self.axs = axs
-        if device_type is DeviceType.ZEUS:
-            file = np.load("/media/data/shipyard/ref_v3_zs.npz")
-        elif device_type is DeviceType.BACTOBOX:
-            file = np.load("/media/data/shipyard/ref_v3_bb.npz")
-        else:
-            raise RuntimeError("There is no reference file for this device type.")
-        (freq, low_th, up_th) = file.values()
-        self.freq = freq
-        self.up_th = up_th
-        self.low_th = low_th
+        self.up_th = [si_test.limits.max_gain] * 2
+        self.low_th = [si_test.limits.min_gain] * 2
+        self.min_bw = [si_test.limits.min_bandwidth * 1e-6] * 2
+        self.features = si_test.features
+        # Selecting low frequency threshold range
+        self.frequencies_mhz = [
+            self._frequency_sweep.frequencies[0] * 1e-6,
+            self._frequency_sweep.frequencies[0] * 2e-6,
+        ]
+
         self._plot()
 
     def _plot(self) -> None:
+        self.plot_results()
         self.plot_reference()
-        self.plot_results(
-            self._frequency_sweep.frequencies,
-            self._frequency_sweep.site0,
-            self._frequency_sweep.site1,
-        )
         self.legend()
 
-    def plot_results(self, freqs, values_site0, values_site1):
-        self.axs[0].plot(np.array(freqs) * 1e-6, values_site0, label="Device results")
-        self.axs[1].plot(np.array(freqs) * 1e-6, values_site1, label="Device results")
+    def plot_results(self):
+        kwargs_datapoints = {
+            "color": "k",
+            "marker": "x",
+            "zorder": 100000,
+        }
+        frequencies_mhz = [f * 1e-6 for f in self._frequency_sweep.frequencies]
+        for n, (site, feature) in enumerate(
+            zip(self._frequency_sweep.sites, self.features.sites)
+        ):
+            self.axs[n].plot(frequencies_mhz, site, label="Device results")
+            self.axs[n].scatter(
+                feature.gain.frequency * 1e-6,
+                feature.gain.amplitude,
+                label="Gain",
+                **kwargs_datapoints,
+            )
+            try:
+                self.axs[n].scatter(
+                    feature.bandwidth.frequency * 1e-6,
+                    feature.bandwidth.amplitude,
+                    label="Bandwidth",
+                    **kwargs_datapoints,
+                )
+            except AttributeError:
+                pass
 
     def plot_reference(self):
         for ax in self.axs:
-            ax.plot(self.freq * 1e-6, self.low_th, "g", alpha=0.2)
-            ax.plot(self.freq * 1e-6, self.up_th, "g", alpha=0.2)
+            ax.plot(self.frequencies_mhz, self.low_th, "g", alpha=0.2)
+            ax.plot(self.frequencies_mhz, self.up_th, "g", alpha=0.2)
 
             ax.fill_between(
-                self.freq * 1e-6,
+                self.frequencies_mhz,
                 self.low_th,
                 self.up_th,
                 color="green",
@@ -66,11 +83,10 @@ class ElecRefPlot:
 
             ax.set_xlim([0.1, 25])
 
-            # Emphasize two specific frequencies
+            # Emphasize minimum bandwidth
             ylims = ax.get_ylim()
-            ax.plot([1.9, 1.9], ylims, "k--", alpha=0.3, label="1.9 MHz")
-            ax.plot([7, 7], ylims, "k:", alpha=0.3, label="7.0 MHz")
-            # ax.set_ylim(ylims)
+            ax.plot(self.min_bw, ylims, "k--", alpha=0.3, label="Minimun BW")
+            ax.set_ylim(ylims)
 
     def legend(self):
         for ax in self.axs:
