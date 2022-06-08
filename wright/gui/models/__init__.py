@@ -1,4 +1,3 @@
-from ._elec_ref import ElecRef
 from ._low_level_config import LowLevelConfig
 from ._reset_params import ResetParams
 from ._run import PartialRun, Run

@@ -67,7 +67,7 @@ class HistoryWidget(QWidget):
         self._table.setRowCount(len(partial_runs))
         for row, partial_run in enumerate(partial_runs):
             # Done at
-            done_at = partial_run.done_at.strftime("%Y-%M-%d %H:%m:%S")
+            done_at = partial_run.done_at.strftime("%Y-%m-%d %H:%M:%S")
             done_at_item = QTableWidgetItem(done_at)
             _set_item_details(done_at_item, partial_run)
             self._table.setItem(row, 0, done_at_item)

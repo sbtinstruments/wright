@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import FilePath
 
-from ...config.branding import Branding
+from ...device.models import Branding
 from ...device import DeviceDescription
 from ...model import FrozenModel
 

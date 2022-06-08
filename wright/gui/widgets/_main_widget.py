@@ -4,6 +4,7 @@ from html import escape as escape_html
 from math import inf
 from traceback import format_exc
 from typing import Iterator, Optional
+from datetime import timedelta
 
 import anyio
 from anyio.abc import TaskGroup
@@ -19,9 +20,10 @@ from ...commands import (
     set_electronics_reference,
 )
 from ...device import Device
-from ...progress import ProgressManager, StatusMap, StatusStream
+from ...device.models import ElecRef
+from ...progress import ProgressManager, StatusMap, StatusStream, Idle
 from ..globals import _STORAGE_DIR
-from ..models import ElecRef, OverallStatus, PartialRun, Run, RunPlan, RunStatus
+from ..models import OverallStatus, PartialRun, Run, RunPlan, RunStatus
 from ._history_widget import HistoryWidget
 from ._log_widget import GuiFormatter, GuiHandler
 from ._outcome_widget import OutcomeWidget
@@ -31,6 +33,11 @@ from ._start_run_dialog import StartRunDialog
 
 _LOGGER = logging.getLogger()  # root logger
 
+_CHECK_SIGNAL_INTEGRITY_STATUS_MAP: StatusMap = {
+    "check_signal_integrity": Idle(
+        expected_duration=timedelta(seconds=1), tries=0
+    ),
+}
 
 class MainWidget(QWidget):
     """Root widget that contains all other widgets."""
@@ -62,13 +69,13 @@ class MainWidget(QWidget):
 
         self._start_run_button = QPushButton(self)
         self._start_run_button.setText("Begin...")
-        self._start_run_button.setMinimumHeight(170)
+        self._start_run_button.setMinimumHeight(200)
         self._start_run_button.setStyleSheet("background: blue;")
         self._layout.addWidget(self._start_run_button, 1, 0)
 
         self._stop_run_button = QPushButton(self)
         self._stop_run_button.setText("Stop run")
-        self._stop_run_button.setMinimumHeight(170)
+        self._stop_run_button.setMinimumHeight(self._start_run_button.minimumHeight())
         self._stop_run_button.hide()
         self._stop_run_button.setStyleSheet("background: lightgray;")
         self._layout.addWidget(self._stop_run_button, 1, 0)
@@ -169,6 +176,7 @@ class MainWidget(QWidget):
                     status_map: StatusMap = {
                         **RESET_DEVICE_STATUS_MAP,
                         **SET_ELECTRONICS_REFERENCE_STATUS_MAP,
+                        **_CHECK_SIGNAL_INTEGRITY_STATUS_MAP,
                     }
 
                     progress_manager = ProgressManager(
@@ -189,20 +197,22 @@ class MainWidget(QWidget):
                             logger=_LOGGER,
                         )
                         if run_plan.steps.set_electronics_reference:
-                            source_data = await set_electronics_reference(
+                            elec_ref = await set_electronics_reference(
                                 device,
                                 progress_manager=progress_manager,
                                 settings=run_plan.steps.set_electronics_reference_settings,
                                 logger=_LOGGER,
                             )
                             assert (
-                                source_data is not None
+                                elec_ref is not None
                             ), "When the step is enabled, we get a result"
-                            elec_ref = ElecRef(source_data=source_data)
-                            elec_ref = await elec_ref.generate_image(
-                                device_type=run_plan.parameters.device_type
-                            )
                             self._outcome_widget.setElecRef(elec_ref)
+
+                            # Test the reference frequencies
+                            if run_plan.steps.check_signal_integrity:
+                                async with progress_manager.step("check_signal_integrity"):
+                                    if not elec_ref.is_accepted:
+                                        raise RuntimeError("Electronics do not pass the signal integrity test.")
                 except anyio.get_cancelled_exc_class():
                     message = "User cancelled"
                     background = "grey"

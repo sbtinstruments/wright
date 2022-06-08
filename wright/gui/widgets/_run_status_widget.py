@@ -34,6 +34,11 @@ class RunStatusWidget(QWidget):
             "Set electronics reference", self._set_electronics_reference
         )
 
+        self._check_signal_integrity = StatusWidget(self)
+        self._layout.addRow(
+            "Check signal integrity", self._check_signal_integrity
+        )
+
         self._status_widgets: dict[str, StatusWidget] = {
             "prepare": self._prepare_status,
             "reset_firmware": self._reset_firmware_status,
@@ -41,6 +46,7 @@ class RunStatusWidget(QWidget):
             "reset_config": self._reset_config_status,
             "reset_data": self._reset_data_status,
             "set_electronics_reference": self._set_electronics_reference,
+            "check_signal_integrity": self._check_signal_integrity,
         }
 
     def statusMap(self) -> RunStatus:

@@ -10,7 +10,7 @@ from anyio.abc import TaskGroup
 
 from ....command_line import CommandLine, SerialCommandLine, SshCommandLine
 from ..._device_condition import DeviceCondition
-from ...models import BbpState, FrequencySweep, PartialBbpStatus, Process
+from ...models import BbpState, ElecRef, PartialBbpStatus, Process, FrequencySweep
 from .._deteriorate import deteriorate
 from .._enter_context import enter_context
 from .._fw import DeviceUboot
@@ -100,7 +100,7 @@ class DeviceLinux(Linux):
         return await self.serial.run("cat /etc/ssh/ssh_host_ed25519_key.pub")
 
     @deteriorate(DeviceCondition.AS_NEW)
-    async def set_electronics_reference(self) -> FrequencySweep:
+    async def set_electronics_reference(self) -> ElecRef:
         """Set the electronics reference data (JSON file).
 
         Returns the reference data (parsed contents of the JSON file).
@@ -111,7 +111,11 @@ class DeviceLinux(Linux):
         elec_ref_data = await self.read_file_as_json(
             Path("/media/config/individual/etc/electrical_test_reference.json")
         )
-        return FrequencySweep.from_elec_ref_data(elec_ref_data)
+        frequency_sweep = FrequencySweep.from_elec_ref_data(elec_ref_data)
+        return ElecRef.from_frequency_sweep(
+            frequency_sweep,
+            device_type=self.device.device_type,
+        )
 
     async def read_file_as_json(self, file: Path, **kwargs: Any) -> dict[str, Any]:
         """Read the given file and parse the contents as JSON."""

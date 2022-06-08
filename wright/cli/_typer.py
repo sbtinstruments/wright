@@ -8,8 +8,8 @@ import anyio
 import typer
 
 from .. import commands, config
-from ..config.branding import Branding
 from ..device import Device, DeviceDescription, DeviceType
+from ..device.models import Branding
 from ..device.execution_context import WrightLiveLinux, enter_context
 from ._log_format import CliFormatter
 

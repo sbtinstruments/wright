@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Type
 
-from ..config.branding import Branding
+from .models import Branding
 from ..model import FrozenModel
 from ..swupdate import MultiBundle
 from ._device_condition import DeviceCondition

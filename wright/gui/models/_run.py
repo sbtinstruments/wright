@@ -6,8 +6,8 @@ from typing import Optional
 
 from pydantic import Field
 
+from ...device.models import ElecRef
 from ...model import FrozenModel
-from ._elec_ref import ElecRef
 from ._run_plan import RunPlan
 from ._run_status import RunStatus
 

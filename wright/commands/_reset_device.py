@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from ..config import create_config_image
-from ..config.branding import Branding
+from ..device.models import Branding
 from ..device import Device, DeviceCondition, DeviceDescription, DeviceType, recipes
 from ..progress import Idle, ProgressManager, StatusMap, StatusStream
 from ..swupdate import MultiBundle

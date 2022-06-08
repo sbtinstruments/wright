@@ -1,3 +1,4 @@
+# TODO: Make a shared package for FrozenModel. We copied this from "wright".
 from __future__ import annotations
 
 from typing import Any, TypeVar
@@ -14,11 +15,11 @@ class FrozenModel(BaseModel):
 
     def update(self: Derived, **kwargs: Any) -> Derived:
         """Return copy of this model updated with the given values.
-
         Unlike `BaseModel.copy`, this function validates the result.
         """
-        items: dict[str, Any] = dict(iter(self), **kwargs)  # type: ignore[arg-type]
-        return type(self)(**items)
+        unvalidated_copy = self.copy(update=kwargs)
+        # For now, we simply call the constructor to trigger validation
+        return type(self)(**unvalidated_copy.dict())
 
     class Config:  # pylint: disable=too-few-public-methods
         frozen = True

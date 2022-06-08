@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from ...config.branding import Branding
+from ...device.models import Branding
 from ...device import DeviceDescription, DeviceType
 from ...model import FrozenModel
 from ._low_level_config import LowLevelConfig

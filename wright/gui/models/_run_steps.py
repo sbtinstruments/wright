@@ -10,6 +10,7 @@ class RunSteps(FrozenModel):
     reset_config: bool = True
     reset_data: bool = True
     set_electronics_reference: bool = True
+    check_signal_integrity: bool = True
 
     @property
     def set_electronics_reference_settings(self) -> StepSettings:

@@ -4,7 +4,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QLabel, QTabWidget, QVBoxLayout, QWidget
 
 from ...device import DeviceType
-from ..models import ElecRef
+from ...device.models import ElecRef
 from ._log_widget import LogWidget
 
 

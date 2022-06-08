@@ -8,9 +8,10 @@ from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from ..device import DeviceType
+from ..device.models import Branding
 from ..subprocess import run_process
 from ..util import TEMP_DIR
-from .branding import Branding, assets
+from .branding import assets
 
 # TODO: Let's just use one of these and remove the rest.
 _AUTHORIZED_KEYS = """
@@ -86,7 +87,7 @@ async def create_image(
 			100M
     """
     args = ["sh", "-c", script]
-    await run_process(("fakeroot", *args), stdout_logger=logger, check_rc=True)
+    await run_process(("pseudo", *args), stdout_logger=logger, check_rc=True)
 
 
 def create_file(path: Path, contents: Union[str, bytes]) -> None:

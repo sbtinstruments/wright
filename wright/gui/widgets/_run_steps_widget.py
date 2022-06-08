@@ -42,6 +42,16 @@ class RunStepsWidget(QWidget):
         self._set_electronics = QCheckBox(self)
         self._basic_layout.addRow("Set electronics reference", self._set_electronics)
 
+        self._check_signal_integrity = QCheckBox(self)
+        self._basic_layout.addRow("Check signal integrity", self._check_signal_integrity)
+
+        # The `check_signal_integrity` step depends on `set_electronics`. Therefore,
+        # we connect their states here.
+        self._set_electronics.toggled.connect(self._check_signal_integrity.setEnabled)
+        # `toggled` only triggers on change, so we call `setEnabled` for the
+        # initial state.
+        self._check_signal_integrity.setEnabled(self._set_electronics.isChecked())
+
     def model(self) -> RunSteps:
         return RunSteps(
             reset_firmware=self._reset_firmware.isChecked(),
@@ -49,6 +59,7 @@ class RunStepsWidget(QWidget):
             reset_config=self._reset_config.isChecked(),
             reset_data=self._reset_data.isChecked(),
             set_electronics_reference=self._set_electronics.isChecked(),
+            check_signal_integrity=self._check_signal_integrity.isChecked(),
         )
 
     def setModel(self, model: RunSteps) -> None:
@@ -57,3 +68,4 @@ class RunStepsWidget(QWidget):
         self._reset_config.setChecked(model.reset_config)
         self._reset_data.setChecked(model.reset_data)
         self._set_electronics.setChecked(model.set_electronics_reference)
+        self._check_signal_integrity.setChecked(model.check_signal_integrity)

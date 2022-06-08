@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ...config.branding import Branding
+from ...device.models import Branding
 from ...device import DeviceType
 from ..models import RunParameters
 
