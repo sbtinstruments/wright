@@ -1,10 +1,7 @@
 import logging
 from contextlib import contextmanager
-from html import escape as escape_html
 from math import inf
-from traceback import format_exc
-from typing import Iterator, Optional
-from datetime import timedelta
+from typing import Iterator
 
 import anyio
 from anyio.abc import TaskGroup
@@ -13,31 +10,20 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCloseEvent, QKeyEvent
 from PyQt5.QtWidgets import QGridLayout, QPushButton, QSizePolicy, QWidget
 
-from ...commands import (
-    RESET_DEVICE_STATUS_MAP,
-    SET_ELECTRONICS_REFERENCE_STATUS_MAP,
-    reset_device,
-    set_electronics_reference,
-)
-from ...device import Device
-from ...device.models import ElecRef
-from ...progress import ProgressManager, StatusMap, StatusStream, Idle
+from ...progress import StatusMap, StatusStream
 from ..globals import _STORAGE_DIR
-from ..models import OverallStatus, PartialRun, Run, RunPlan, RunStatus
+from ..models import PartialRun, Run, RunPlan, RunStatus
 from ._history_widget import HistoryWidget
 from ._log_widget import GuiFormatter, GuiHandler
 from ._outcome_widget import OutcomeWidget
 from ._run_plan_widget import RunPlanWidget
 from ._run_status_widget import RunStatusWidget
-from ._start_run_dialog import StartRunDialog
+from .._start_run import start_run
+from .._monitor_run import monitor_run_progress
+from .._get_run_plan import get_run_plan
 
 _LOGGER = logging.getLogger()  # root logger
 
-_CHECK_SIGNAL_INTEGRITY_STATUS_MAP: StatusMap = {
-    "check_signal_integrity": Idle(
-        expected_duration=timedelta(seconds=1), tries=0
-    ),
-}
 
 class MainWidget(QWidget):
     """Root widget that contains all other widgets."""
@@ -119,7 +105,7 @@ class MainWidget(QWidget):
         self._run_status_widget.setStatusMap(run.status)
 
     def _plan_and_start_run(self) -> None:
-        run_plan = self._get_run_plan()
+        run_plan = get_run_plan(self, self._history_widget)
         # Early out if we didn't get any settings (the user cancelled)
         if run_plan is None:
             return
@@ -138,9 +124,17 @@ class MainWidget(QWidget):
         with self._run_mode(run_plan, run_cancel_scope):
             async with anyio.create_task_group() as run_tg:
                 run_tg.start_soon(
-                    self._reset_device, run_plan, progress_send_stream, run_cancel_scope
+                    start_run,
+                    run_plan,
+                    progress_send_stream,
+                    run_cancel_scope,
+                    self._outcome_widget,
                 )
-                run_tg.start_soon(self._monitor_run_progress, progress_receive_stream)
+                run_tg.start_soon(
+                    monitor_run_progress,
+                    progress_receive_stream,
+                    self._run_status_widget,
+                )
         # Save run
         run = Run(
             plan=run_plan,
@@ -151,86 +145,6 @@ class MainWidget(QWidget):
         run.to_dir(_STORAGE_DIR)
         # Refresh run history
         self._history_widget.refresh()
-
-    async def _reset_device(
-        self,
-        run_plan: RunPlan,
-        progress_send_stream: StatusStream,
-        cancel_scope: anyio.CancelScope,
-    ) -> None:
-        async with progress_send_stream:
-            with cancel_scope:
-                try:
-                    # Early out if already cancelled.
-                    # TODO: Check if anyio fixed this issue upstream:
-                    #
-                    #     https://github.com/agronholm/anyio/issues/433
-                    #
-                    if cancel_scope.cancel_called:
-                        raise anyio.get_cancelled_exc_class()()
-
-                    reset_params = run_plan.parameters.reset_params
-                    reset_device_settings = run_plan.steps.reset_device_settings
-
-                    # Progress manager
-                    status_map: StatusMap = {
-                        **RESET_DEVICE_STATUS_MAP,
-                        **SET_ELECTRONICS_REFERENCE_STATUS_MAP,
-                        **_CHECK_SIGNAL_INTEGRITY_STATUS_MAP,
-                    }
-
-                    progress_manager = ProgressManager(
-                        status_map, status_stream=progress_send_stream
-                    )
-
-                    # Device and it's description
-                    device = Device.from_description(
-                        reset_params.device_description, logger=_LOGGER
-                    )
-                    async with device, progress_manager:
-                        await reset_device(
-                            device,
-                            reset_params.swu_file,
-                            reset_params.branding,
-                            settings=reset_device_settings,
-                            progress_manager=progress_manager,
-                            logger=_LOGGER,
-                        )
-                        if run_plan.steps.set_electronics_reference:
-                            elec_ref = await set_electronics_reference(
-                                device,
-                                progress_manager=progress_manager,
-                                settings=run_plan.steps.set_electronics_reference_settings,
-                                logger=_LOGGER,
-                            )
-                            assert (
-                                elec_ref is not None
-                            ), "When the step is enabled, we get a result"
-                            self._outcome_widget.setElecRef(elec_ref)
-
-                            # Test the reference frequencies
-                            if run_plan.steps.check_signal_integrity:
-                                async with progress_manager.step("check_signal_integrity"):
-                                    if not elec_ref.is_accepted:
-                                        raise RuntimeError("Electronics do not pass the signal integrity test.")
-                except anyio.get_cancelled_exc_class():
-                    message = "User cancelled"
-                    background = "grey"
-                # Catch broad `Exception` as we want to handle all the general errors
-                except (  # pylint: disable=broad-except
-                    anyio.ExceptionGroup,
-                    Exception,
-                ):
-                    message = format_exc()
-                    background = "red"
-                else:
-                    message = "Done"
-                    background = "green"
-        style = f"color: white; background-color: {background};"
-        # We add line breaks to make the message stand out
-        message_html = escape_html(message)
-        html = f'<pre style="{style}">{message_html}</pre>'
-        self._outcome_widget.appendLogHtml(html)
 
     @contextmanager
     def _run_mode(
@@ -269,59 +183,3 @@ class MainWidget(QWidget):
             self._start_run_button.setEnabled(True)
             self._start_run_button.show()
             self._history_widget.setEnabled(True)
-
-    def _get_run_plan(self) -> Optional[RunPlan]:
-        dialog = StartRunDialog(self)
-        # Try get all `last_` plan from the run history
-        last_partial_run = self._history_widget.latestRun()
-        if last_partial_run is not None:
-            try:
-                last_run = Run.from_partial_run(last_partial_run)
-                # Always "check" all the step fields
-                last_run = last_run.with_default_steps()
-                # Increment hostname if the run completed (no cancellation or errors).
-                if last_run.status.overall is OverallStatus.COMPLETED:
-                    last_run = last_run.with_next_hostname()
-                dialog.setRunPlan(last_run.plan)
-            # `ValueError`: If we can't construct `Run`
-            except ValueError as exc:
-                _LOGGER.warning(f"Could not reconstruct last run: {exc}")
-                _LOGGER.debug("Reason:", exc_info=exc)
-                pass
-        if not dialog.exec():
-            # Early out on cancel
-            return None
-        try:
-            return dialog.model()
-        # When we construct the model, we do checks such as "does this file
-        # exist on the file system?". This is an invitation for race conditions.
-        # Therefore, we wrap the `dialog.model()` call in a `try..catch` block.
-        except ValueError as exc:
-            _LOGGER.error(f"Did not start run due to invalid model: {exc}")
-            _LOGGER.debug("Reason:", exc_info=exc)
-            # Early out if the model is invalid
-            return None
-
-    async def _monitor_run_progress(
-        self, progress_receive_stream: MemoryObjectReceiveStream[StatusMap]
-    ) -> None:
-        status_map: StatusMap = {}
-        progress_tg = anyio.create_task_group()
-
-        async def _receive_status() -> None:
-            nonlocal status_map
-            async with progress_receive_stream:
-                async for status_map in progress_receive_stream:
-                    run_status_map = RunStatus.from_progress_status_map(status_map)
-                    self._run_status_widget.setStatusMap(run_status_map)
-            progress_tg.cancel_scope.cancel()
-
-        async def _update_status() -> None:
-            while True:
-                run_status_map = RunStatus.from_progress_status_map(status_map)
-                self._run_status_widget.setStatusMap(run_status_map)
-                await anyio.sleep(1)
-
-        async with progress_tg:
-            progress_tg.start_soon(_receive_status)
-            progress_tg.start_soon(_update_status)
