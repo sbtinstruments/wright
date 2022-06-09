@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..globals import _STORAGE_DIR
+from ..globals import STORAGE_DIR
 from ..models import OverallStatus, PartialRun
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,16 +63,16 @@ class HistoryWidget(QWidget):
     def refresh(self) -> None:
         partial_runs = list(self._partial_runs())
         # Sort by done date
-        partial_runs = sorted(partial_runs, key=lambda pr: pr.done_at)
+        partial_runs = sorted(partial_runs, key=lambda pr: pr.base.done_at)
         self._table.setRowCount(len(partial_runs))
         for row, partial_run in enumerate(partial_runs):
             # Done at
-            done_at = partial_run.done_at.strftime("%Y-%m-%d %H:%M:%S")
+            done_at = partial_run.base.done_at.strftime("%Y-%m-%d %H:%M:%S")
             done_at_item = QTableWidgetItem(done_at)
             _set_item_details(done_at_item, partial_run)
             self._table.setItem(row, 0, done_at_item)
             # Hostname
-            hostname_item = QTableWidgetItem(partial_run.plan.parameters.hostname)
+            hostname_item = QTableWidgetItem(partial_run.base.plan.parameters.hostname)
             _set_item_details(hostname_item, partial_run)
             self._table.setItem(row, 1, hostname_item)
         # Wait 0.1 seconds before we scroll. Otherwise, it doesn't actually
@@ -85,11 +85,13 @@ class HistoryWidget(QWidget):
         scroll_bar.setValue(scroll_bar.maximum())
 
     def _partial_runs(self) -> Iterable[PartialRun]:
-        directories = (d for d in _STORAGE_DIR.iterdir() if d.is_dir())
+        directories = (d for d in STORAGE_DIR.iterdir() if d.is_dir())
         for directory in directories:
             try:
                 yield PartialRun.from_dir(directory)
-            except ValueError as exc:
+            # E.g., `ValueError`, `FileNotFoundError`, etc. In any case, we just log
+            # the warning and let the show go on.
+            except Exception as exc:  # pylint: disble=broad-except
                 _LOGGER.warning(
                     f"Could not parse run directory {directory} due to: {exc}"
                 )
@@ -100,9 +102,9 @@ def _set_item_details(item: QTableWidgetItem, partial_run: PartialRun) -> None:
     item.setData(Qt.ItemDataRole.UserRole, partial_run)
     # Set background color
     background_color: Optional[Qt.GlobalColor] = None
-    if partial_run.status.overall is OverallStatus.COMPLETED:
+    if partial_run.base.status.overall is OverallStatus.COMPLETED:
         background_color = Qt.GlobalColor.green
-    elif partial_run.status.overall is OverallStatus.FAILED:
+    elif partial_run.base.status.overall is OverallStatus.FAILED:
         background_color = Qt.GlobalColor.red
     if background_color is not None:
         item.setBackground(background_color)

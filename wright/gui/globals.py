@@ -1,4 +1,5 @@
 from pathlib import Path
 
-_STORAGE_DIR = Path("/media/data/shipyard/storage")
-_STORAGE_DIR.mkdir(exist_ok=True)
+SHIPYARD_DIR = Path("/media/data/shipyard")
+STORAGE_DIR = SHIPYARD_DIR / "storage"
+STORAGE_DIR.mkdir(exist_ok=True)

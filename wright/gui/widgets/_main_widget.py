@@ -11,8 +11,8 @@ from PyQt5.QtGui import QCloseEvent, QKeyEvent
 from PyQt5.QtWidgets import QGridLayout, QPushButton, QSizePolicy, QWidget
 
 from ...progress import StatusMap, StatusStream
-from ..globals import _STORAGE_DIR
-from ..models import PartialRun, Run, RunPlan, RunStatus
+from ..globals import STORAGE_DIR
+from ..models import PartialRun, Run, RunPlan, RunStatus, RunBase
 from ._history_widget import HistoryWidget
 from ._log_widget import GuiFormatter, GuiHandler
 from ._outcome_widget import OutcomeWidget
@@ -99,10 +99,10 @@ class MainWidget(QWidget):
         except ValueError as exc:
             _LOGGER.warning(f"Could not parse run: {exc}")
             return
-        self._run_plan_widget.setRunPlan(run.plan)
+        self._run_plan_widget.setRunPlan(run.base.plan)
         self._outcome_widget.setLogHtml(run.log)
         self._outcome_widget.setElecRef(run.elec_ref)
-        self._run_status_widget.setStatusMap(run.status)
+        self._run_status_widget.setStatusMap(run.base.status)
 
     def _plan_and_start_run(self) -> None:
         run_plan = get_run_plan(self, self._history_widget)
@@ -137,12 +137,14 @@ class MainWidget(QWidget):
                 )
         # Save run
         run = Run(
-            plan=run_plan,
+            base=RunBase(
+                status=self._run_status_widget.statusMap(),
+                plan=run_plan,
+            ),
             log=self._outcome_widget.getLogHtml(),
             elec_ref=self._outcome_widget.getElecRef(),
-            status=self._run_status_widget.statusMap(),
         )
-        run.to_dir(_STORAGE_DIR)
+        run.to_dir(STORAGE_DIR)
         # Refresh run history
         self._history_widget.refresh()
 
