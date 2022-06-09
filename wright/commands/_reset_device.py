@@ -89,6 +89,7 @@ async def reset_device(
         await run_step(
             power_off_on_error(recipes.reset_operating_system, device),
             device_bundle.operating_system.file,
+            multi_bundle.version,
             progress_manager=progress_manager,
             logger=logger,
             settings=settings.reset_operating_system,

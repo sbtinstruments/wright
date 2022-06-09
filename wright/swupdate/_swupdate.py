@@ -36,6 +36,7 @@ class MultiBundle(FrozenModel):
     """Collection of device-specific update bundles."""
 
     checksum: str
+    version: str
     # Mapping of device type (given as a string) to device bundle
     device_bundles: dict[str, DeviceBundle]
 
@@ -69,11 +70,11 @@ class MultiBundle(FrozenModel):
             await extract_swu(swu, swu_dir, logger=logger)
             await decompress_files(swu_dir, logger=logger)
             store_checksum(swu, checksum_file)
-        # Get device bundles
-        device_bundles = await get_device_bundles(sw_description_file)
+        # Get version and device bundles
+        version, device_bundles = await parse_swu(sw_description_file)
         # Get checksum
         checksum = checksum_file.read_text()
-        return cls(checksum=checksum, device_bundles=device_bundles)
+        return cls(checksum=checksum, version=version, device_bundles=device_bundles)
 
 
 async def extract_swu(
@@ -129,12 +130,23 @@ def _decompress_file_sync(
             io_out.write(chunk)
 
 
-async def get_device_bundles(sw_description_file: Path) -> dict[str, DeviceBundle]:
-    """Get firmware and operating system dvice bundles from the description file."""
-    swu_dir = sw_description_file.parent
+async def parse_swu(sw_description_file: Path) -> tuple[str, dict[str, DeviceBundle]]:
     # Load in the libconfig-encoded description file
     with sw_description_file.open("rt") as io:
         sw_description = libconf.load(io)
+    version = get_version(sw_description)
+    swu_dir = sw_description_file.parent
+    device_bundles = await get_device_bundles(sw_description, swu_dir)
+    return version, device_bundles
+
+
+def get_version(sw_description: libconf.AttrDict) -> str:
+    """Get firmware and operating system device bundles from the description file."""
+    return sw_description["software"]["version"]
+
+
+async def get_device_bundles(sw_description: libconf.AttrDict, swu_dir: Path) -> dict[str, DeviceBundle]:
+    """Get firmware and operating system dvice bundles from the description file."""
     # Extract device bundles from the description
     software = sw_description["software"]
     # Get all device descriptions. This filters out the top-level entries such as

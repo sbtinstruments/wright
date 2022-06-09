@@ -41,23 +41,23 @@ class ElecRef(FrozenModel):
     def load_from_dir(cls, directory: Path) -> ElecRef:
         source_data_file = directory / _SOURCE_DATA_FILE_NAME
         source_data = FrequencySweep.parse_file(source_data_file)
-        elec_rule_set_file = directory / _ELEC_RULE_SET_FILE_NAME
-        elec_rule_set = ElecRuleSet.parse_file(elec_rule_set_file)
+        rule_set_file = directory / _ELEC_RULE_SET_FILE_NAME
+        rule_set = ElecRuleSet.parse_file(rule_set_file)
         image_file: Optional[Path]
         image_file = directory / _IMAGE_FILE_NAME
         if not image_file.is_file():
             image_file = None
         return cls(
             source_data=source_data,
-            elec_rule_set=elec_rule_set,
+            rule_set=rule_set,
             image_file=image_file
         )
 
     def save_in_dir(self, directory: Path) -> None:
         source_data_file = directory / _SOURCE_DATA_FILE_NAME
         source_data_file.write_text(self.source_data.json())
-        elec_rule_set_file = directory / _ELEC_RULE_SET_FILE_NAME
-        elec_rule_set_file.write_text(self.rule_set.json())
+        rule_set_file = directory / _ELEC_RULE_SET_FILE_NAME
+        rule_set_file.write_text(self.rule_set.json())
         if self.image_file is not None:
             copyfile(self.image_file, directory / _IMAGE_FILE_NAME)
 

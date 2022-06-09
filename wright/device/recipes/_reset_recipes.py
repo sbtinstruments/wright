@@ -24,7 +24,11 @@ async def reset_firmware(device: Device, firmware_image: Path) -> None:
             await uboot.write_image_to_flash(firmware_image)
 
 
-async def reset_operating_system(device: Device, operating_system_image: Path) -> None:
+async def reset_operating_system(
+    device: Device,
+    operating_system_image: Path,
+    software_version: str
+) -> None:
     """Remove any existing operating system and write the given images to the device."""
     with anyio.fail_after(100):
         async with enter_context(DeviceUboot, device) as uboot:
@@ -40,6 +44,9 @@ async def reset_operating_system(device: Device, operating_system_image: Path) -
             await uboot.write_image_to_mmc(
                 operating_system_image, uboot.mmc.system0, uboot.mmc.system1
             )
+            # Write software version
+            # TODO: Find a better point in time to do this. Maybe even as a separate step.
+            await uboot.set_env("software_version", software_version)
 
 
 async def reset_config(device: Device, config_image: Path) -> None:

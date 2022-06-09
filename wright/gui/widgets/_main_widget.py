@@ -284,7 +284,9 @@ class MainWidget(QWidget):
                     last_run = last_run.with_next_hostname()
                 dialog.setRunPlan(last_run.plan)
             # `ValueError`: If we can't construct `Run`
-            except ValueError:
+            except ValueError as exc:
+                _LOGGER.warning(f"Could not reconstruct last run: {exc}")
+                _LOGGER.debug("Reason:", exc_info=exc)
                 pass
         if not dialog.exec():
             # Early out on cancel

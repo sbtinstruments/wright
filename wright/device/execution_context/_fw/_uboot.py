@@ -240,6 +240,30 @@ class Uboot(SerialBase, ABC):
         assert result.startswith(prefix)
         return result[len(prefix) :]
 
+    async def set_env(
+        self,
+        name: str,
+        value: str,
+        *,
+        save_env: Optional[bool] = None
+    ) -> None:
+        """Set a U-boot environment variable by name.
+        
+        Saves the entire environment to persistent storage unless disabled
+        via `save_env=False`.
+        """
+        if save_env is None:
+            save_env = True
+        # The following works even if `value` contains spaces. There is no need
+        # for quotation.
+        await self.run(f"setenv {name} {value}")
+        if save_env:
+            await self.save_env()
+
+    async def save_env(self) -> None:
+        """Save all U-boot environment variables to persistent storage."""
+        await self.run(f"saveenv")
+
     async def _initialize_network(self, *, force: bool = False) -> None:
         """Initialize the device for network communication.
 
