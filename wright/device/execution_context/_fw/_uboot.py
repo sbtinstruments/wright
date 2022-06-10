@@ -290,7 +290,8 @@ class Uboot(SerialBase, ABC):
         # In practice, this improves transfer speeds tenfold. E.g.,
         # from ~1 MB/s to ~10 MB/s.
         await self.run("setenv tftpblocksize 1468")
-        await self.run("setenv tftpwindowsize 256")
+        await self.run("setenv tftpwindowsize 16")
+        await self.run("setenv tftptimeout 1000")  # 1 second
         # We exploit the "tftpboot" command and make it do arbitrary file transfers.
         # In order to do so, we disable the "boot" aspect of it with `autostart=no`.
         await self.run("setenv autostart no")
