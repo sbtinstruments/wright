@@ -262,11 +262,16 @@ reference = "piwheels"
 
 [[package]]
 name = "kiwisolver"
-version = "1.4.2"
+version = "1.4.1"
 description = "A fast implementation of the Cassowary constraint solver"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.7"
+
+[package.source]
+type = "legacy"
+url = "https://www.piwheels.org/simple"
+reference = "piwheels"
 
 [[package]]
 name = "lazy-object-proxy"
@@ -671,7 +676,7 @@ reference = "piwheels"
 
 [[package]]
 name = "rpi.gpio"
-version = "0.7.0"
+version = "0.7.1"
 description = "A module to control Raspberry Pi GPIO channels"
 category = "main"
 optional = false
@@ -827,7 +832,7 @@ gui = ["PyQt5", "qasync", "QtAwesome", "matplotlib"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "817ffac499615e0d550ab26519763aeea1f79992bfb1cef2dcb3613900b7182e"
+content-hash = "3c6d0ef4c9f2ef01abe513786c8b828f5fd66aeacc91606d14e4e23d23e7b238"
 
 [metadata.files]
 anyio = [
@@ -885,49 +890,10 @@ isort = [
     {file = "isort-5.10.1-py3-none-any.whl", hash = "sha256:eea14d9ea804d971049b4a1f35d1fde5a1988a3d6adc52a01f84f6ed4afca079"},
 ]
 kiwisolver = [
-    {file = "kiwisolver-1.4.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:6e395ece147f0692ca7cdb05a028d31b83b72c369f7b4a2c1798f4b96af1e3d8"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0b7f50a1a25361da3440f07c58cd1d79957c2244209e4f166990e770256b6b0b"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:3c032c41ae4c3a321b43a3650e6ecc7406b99ff3e5279f24c9b310f41bc98479"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:1dcade8f6fe12a2bb4efe2cbe22116556e3b6899728d3b2a0d3b367db323eacc"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:0e45e780a74416ef2f173189ef4387e44b5494f45e290bcb1f03735faa6779bf"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9d2bb56309fb75a811d81ed55fbe2208aa77a3a09ff5f546ca95e7bb5fac6eff"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:69b2d6c12f2ad5f55104a36a356192cfb680c049fe5e7c1f6620fc37f119cdc2"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:262c248c60f22c2b547683ad521e8a3db5909c71f679b93876921549107a0c24"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-win32.whl", hash = "sha256:1008346a7741620ab9cc6c96e8ad9b46f7a74ce839dbb8805ddf6b119d5fc6c2"},
-    {file = "kiwisolver-1.4.2-cp310-cp310-win_amd64.whl", hash = "sha256:6ece2e12e4b57bc5646b354f436416cd2a6f090c1dadcd92b0ca4542190d7190"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:b978afdb913ca953cf128d57181da2e8798e8b6153be866ae2a9c446c6162f40"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7f88c4b8e449908eeddb3bbd4242bd4dc2c7a15a7aa44bb33df893203f02dc2d"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:e348f1904a4fab4153407f7ccc27e43b2a139752e8acf12e6640ba683093dd96"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:c839bf28e45d7ddad4ae8f986928dbf5a6d42ff79760d54ec8ada8fb263e097c"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:8ae5a071185f1a93777c79a9a1e67ac46544d4607f18d07131eece08d415083a"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:c222f91a45da9e01a9bc4f760727ae49050f8e8345c4ff6525495f7a164c8973"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-win32.whl", hash = "sha256:a4e8f072db1d6fb7a7cc05a6dbef8442c93001f4bb604f1081d8c2db3ca97159"},
-    {file = "kiwisolver-1.4.2-cp37-cp37m-win_amd64.whl", hash = "sha256:be9a650890fb60393e60aacb65878c4a38bb334720aa5ecb1c13d0dac54dd73b"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-macosx_10_9_universal2.whl", hash = "sha256:8ec2e55bf31b43aabe32089125dca3b46fdfe9f50afbf0756ae11e14c97b80ca"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:1d1078ba770d6165abed3d9a1be1f9e79b61515de1dd00d942fa53bba79f01ae"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:cbb5eb4a2ea1ffec26268d49766cafa8f957fe5c1b41ad00733763fae77f9436"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2e6cda72db409eefad6b021e8a4f964965a629f577812afc7860c69df7bdb84a"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:b1605c7c38cc6a85212dfd6a641f3905a33412e49f7c003f35f9ac6d71f67720"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:81237957b15469ea9151ec8ca08ce05656090ffabc476a752ef5ad7e2644c526"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:240009fdf4fa87844f805e23f48995537a8cb8f8c361e35fda6b5ac97fcb906f"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:240c2d51d098395c012ddbcb9bd7b3ba5de412a1d11840698859f51d0e643c4f"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-win32.whl", hash = "sha256:8b6086aa6936865962b2cee0e7aaecf01ab6778ce099288354a7229b4d9f1408"},
-    {file = "kiwisolver-1.4.2-cp38-cp38-win_amd64.whl", hash = "sha256:0d98dca86f77b851350c250f0149aa5852b36572514d20feeadd3c6b1efe38d0"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:91eb4916271655dfe3a952249cb37a5c00b6ba68b4417ee15af9ba549b5ba61d"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:fa4d97d7d2b2c082e67907c0b8d9f31b85aa5d3ba0d33096b7116f03f8061261"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:71469b5845b9876b8d3d252e201bef6f47bf7456804d2fbe9a1d6e19e78a1e65"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:8ff3033e43e7ca1389ee59fb7ecb8303abb8713c008a1da49b00869e92e3dd7c"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:89b57c2984f4464840e4b768affeff6b6809c6150d1166938ade3e22fbe22db8"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ffbdb9a96c536f0405895b5e21ee39ec579cb0ed97bdbd169ae2b55f41d73219"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:8a830a03970c462d1a2311c90e05679da56d3bd8e78a4ba9985cb78ef7836c9f"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:f74f2a13af201559e3d32b9ddfc303c94ae63d63d7f4326d06ce6fe67e7a8255"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-win32.whl", hash = "sha256:e677cc3626287f343de751e11b1e8a5b915a6ac897e8aecdbc996cd34de753a0"},
-    {file = "kiwisolver-1.4.2-cp39-cp39-win_amd64.whl", hash = "sha256:b3e251e5c38ac623c5d786adb21477f018712f8c6fa54781bd38aa1c60b60fc2"},
-    {file = "kiwisolver-1.4.2-pp37-pypy37_pp73-manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:0c380bb5ae20d829c1a5473cfcae64267b73aaa4060adc091f6df1743784aae0"},
-    {file = "kiwisolver-1.4.2-pp37-pypy37_pp73-manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:484f2a5f0307bc944bc79db235f41048bae4106ffa764168a068d88b644b305d"},
-    {file = "kiwisolver-1.4.2-pp37-pypy37_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0e8afdf533b613122e4bbaf3c1e42c2a5e9e2d1dd3a0a017749a7658757cb377"},
-    {file = "kiwisolver-1.4.2-pp37-pypy37_pp73-win_amd64.whl", hash = "sha256:42f6ef9b640deb6f7d438e0a371aedd8bef6ddfde30683491b2e6f568b4e884e"},
-    {file = "kiwisolver-1.4.2.tar.gz", hash = "sha256:7f606d91b8a8816be476513a77fd30abe66227039bd6f8b406c348cb0247dcc9"},
+    {file = "kiwisolver-1.4.1-cp37-cp37m-linux_armv6l.whl", hash = "sha256:d57413af376be70718716d548118ec926a1e39ff5e8f8a636e98548ea53c8edf"},
+    {file = "kiwisolver-1.4.1-cp37-cp37m-linux_armv7l.whl", hash = "sha256:d57413af376be70718716d548118ec926a1e39ff5e8f8a636e98548ea53c8edf"},
+    {file = "kiwisolver-1.4.1-cp39-cp39-linux_armv6l.whl", hash = "sha256:ba63ba3372c6e3903cd9bcd955657b53aa6629888a56d8dadca33f1aeb20a0f7"},
+    {file = "kiwisolver-1.4.1-cp39-cp39-linux_armv7l.whl", hash = "sha256:ba63ba3372c6e3903cd9bcd955657b53aa6629888a56d8dadca33f1aeb20a0f7"},
 ]
 lazy-object-proxy = [
     {file = "lazy_object_proxy-1.7.1-cp37-cp37m-linux_armv6l.whl", hash = "sha256:5f229a46fa65c91c91a604ab9e20933e53551d5976a5627cc5c47108d244dbf1"},
@@ -1025,12 +991,12 @@ rope = [
     {file = "rope-0.18.0-py3-none-any.whl", hash = "sha256:446e6a6d880ec9860947c5c61b87799614c4802e904d1fe23f394d3556fa8559"},
 ]
 "rpi.gpio" = [
-    {file = "RPi.GPIO-0.7.0-cp34-cp34m-linux_armv6l.whl", hash = "sha256:5cd2f3c88d0b1e2f4780c905702c0474768c2bc113fb793121c2e117b401ab16"},
-    {file = "RPi.GPIO-0.7.0-cp34-cp34m-linux_armv7l.whl", hash = "sha256:5cd2f3c88d0b1e2f4780c905702c0474768c2bc113fb793121c2e117b401ab16"},
-    {file = "RPi.GPIO-0.7.0-cp35-cp35m-linux_armv6l.whl", hash = "sha256:7da5235aeba20da39ad4fb97f3ba3a2c6b2d60bba8958b00a4df42f608c6d42e"},
-    {file = "RPi.GPIO-0.7.0-cp35-cp35m-linux_armv7l.whl", hash = "sha256:7da5235aeba20da39ad4fb97f3ba3a2c6b2d60bba8958b00a4df42f608c6d42e"},
-    {file = "RPi.GPIO-0.7.0-cp37-cp37m-linux_armv6l.whl", hash = "sha256:6a4791f41cafc2ee6e4cb70e5bd31fadc66a0cfab29b38df8723a98f6f73ad5a"},
-    {file = "RPi.GPIO-0.7.0-cp37-cp37m-linux_armv7l.whl", hash = "sha256:6a4791f41cafc2ee6e4cb70e5bd31fadc66a0cfab29b38df8723a98f6f73ad5a"},
+    {file = "RPi.GPIO-0.7.1-cp35-cp35m-linux_armv6l.whl", hash = "sha256:5073d1972727cfad38a1a42f02da91dc41f137679290aa804ab6c410168347ac"},
+    {file = "RPi.GPIO-0.7.1-cp35-cp35m-linux_armv7l.whl", hash = "sha256:5073d1972727cfad38a1a42f02da91dc41f137679290aa804ab6c410168347ac"},
+    {file = "RPi.GPIO-0.7.1-cp37-cp37m-linux_armv6l.whl", hash = "sha256:e5dfec2c4ccb7dbe9eef3dfc76a3b04121fc62d77fd8fbe1a8e841468a1b0c4c"},
+    {file = "RPi.GPIO-0.7.1-cp37-cp37m-linux_armv7l.whl", hash = "sha256:e5dfec2c4ccb7dbe9eef3dfc76a3b04121fc62d77fd8fbe1a8e841468a1b0c4c"},
+    {file = "RPi.GPIO-0.7.1-cp39-cp39-linux_armv6l.whl", hash = "sha256:231f6142c25975a7e39b96faf4905f05f97dba6809e8c5f0d58f284b35b4b821"},
+    {file = "RPi.GPIO-0.7.1-cp39-cp39-linux_armv7l.whl", hash = "sha256:231f6142c25975a7e39b96faf4905f05f97dba6809e8c5f0d58f284b35b4b821"},
 ]
 six = [
     {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},

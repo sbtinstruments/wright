@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# Update apt
+apt update
+# piwheels' version of cffi depends on libffi7 (our distro ships with libffi8)
+apt -y install libffi7
+ldconfig
+
 # Create local python environment (we use `echo ""` as a noop)
 poetry run echo ""
 
@@ -11,28 +17,6 @@ ln -sf /usr/lib/python3.9/site-packages/PyQt5* .venv/lib/python3.9/site-packages
 # cryptography fails at runtime:
 #     ImportError: /home/root/projects/wright/.venv/lib/python3.9/site-packages/cryptography/hazmat/bindings/_openssl.abi3.so: undefined symbol: EVP_PBE_scrypt, version OPENSSL_1_1_0
 ln -sf /usr/lib/python3.9/site-packages/cryptography* .venv/lib/python3.9/site-packages/
-# cffi fails at runtime (when cryptography imports it):
-#     ModuleNotFoundError: No module named '_cffi_backend'
-ln -sf /usr/lib/python3.9/site-packages/cffi* .venv/lib/python3.9/site-packages/
-ln -sf /usr/lib/python3.9/site-packages/_cffi_backend* .venv/lib/python3.9/site-packages/
-# RPi.GPIO fails at runtime:
-#     ModuleNotFoundError: No module named 'RPi._GPIO'
-ln -sf /usr/lib/python3.9/site-packages/RPi* .venv/lib/python3.9/site-packages/
 
 # Install the remaining dependencies
 poetry install -E gui
-
-# numpy fails at runtime (when matlplotlib imports it):
-#     ModuleNotFoundError: No module named 'numpy.core._multiarray_umath'
-# We do this after `poetry install` because I (FPA) didn't find another way.
-# Poetry won't resolve numpty because of some bogus claim that it requires Python >= 3.11.
-# That version isn't even out yet at the time of writing.
-rm -rf .venv/lib/python3.9/site-packages/numpy*
-ln -sf /usr/lib/python3.9/site-packages/numpy* .venv/lib/python3.9/site-packages/
-# Same thing for the following:
-rm -rf .venv/lib/python3.9/site-packages/matplotlib*
-ln -sf /usr/lib/python3.9/site-packages/matplotlib* .venv/lib/python3.9/site-packages/
-rm -rf .venv/lib/python3.9/site-packages/PIL*
-ln -sf /usr/lib/python3.9/site-packages/PIL* .venv/lib/python3.9/site-packages/
-rm -rf .venv/lib/python3.9/site-packages/mpl_toolkits*
-ln -sf /usr/lib/python3.9/site-packages/mpl_toolkits* .venv/lib/python3.9/site-packages/
