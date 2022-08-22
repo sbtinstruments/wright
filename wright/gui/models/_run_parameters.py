@@ -42,12 +42,9 @@ class RunParameters(FrozenModel):
         """Return copy with `hostname` set as per current time and parameters."""
         # We just assume that the hostname has a valid device type abbreviation for now.
         device_abbr = self.hostname[:2]  # E.g.: "bb" as in BactoBox
-        now = datetime.now()
-        # Use the ISO version to ensure standardized fields. E.g., week numbers.
-        now_iso = now.isocalendar()
-        year = str(now_iso[0])[2:]  # E.g.: "21" as in 2021
-        week = now_iso[1]  # E.g.: `42`
+        year = self.hostname[2:4]  # E.g.: "22" as in year 2022
+        week = self.hostname[4:6]  # E.g.: "47" as in week 47
         # TODO: Handle roll-over. That is, what happens after 999?
         id_ = int(self.hostname[-3:]) + 1
-        hostname = f"{device_abbr}{year}{week:02}{id_:03}"
+        hostname = f"{device_abbr}{year}{week}{id_:03}"
         return self.update(hostname=hostname)
