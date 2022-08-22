@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from importlib import resources
 from logging import Logger
-from typing import TYPE_CHECKING, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 
 import anyio
 from anyio.abc import TaskStatus
@@ -75,11 +75,17 @@ async def jtag_boot_to_uboot(device: "Device") -> None:
         except ocd.ServerError:
             device.logger.warning("Could not start OpenOCD server.")
             # Early out if we don't have enough info to cycle power to the USB port
-            if device.link.communication.jtag_usb_serial is None:
+            comm = device.link.communication
+            if (
+                comm.jtag_usb_serial is None or
+                comm.jtag_usb_hub_location is None or
+                comm.jtag_usb_hub_port is None
+            ):
                 device.logger.warning(
                     "At this point, we usually try to cycle power to the USB port "
                     "to reset the JTAG cable. We can't do this now, since we don't "
-                    "have the JTAG cable serial number."
+                    "have any serial number, hub location, or port number to identify "
+                    "the JTAB cable."
                 )
                 raise
             # Cycle power to USB ports
@@ -87,15 +93,20 @@ async def jtag_boot_to_uboot(device: "Device") -> None:
                 "We power cycle the USB port to reset the JTAG cable. "
                 "Usually, this fixes the issues."
             )
-            await _power_cycle_usb_ports(
-                logger=device.logger.getChild("usb"),
-                search=device.link.communication.jtag_usb_serial,
-            )
+            # Prioritize the low-level identifiers (USB hub location and/or port)
+            # over high-level identifiers (USB serial number).
+            options: dict[str, Any] = {}
+            if (comm.jtag_usb_hub_location is not None or comm.jtag_usb_hub_port is not None):
+                options["hub_location"] = comm.jtag_usb_hub_location
+                options["hub_port"] = comm.jtag_usb_hub_port
+            elif (comm.jtag_usb_serial is not None):
+                options["search"] = comm.jtag_usb_serial
+            await _power_cycle_usb_ports(logger=device.logger.getChild("usb"), **options)
             # Try to start the server once more.
             # TODO: Somehow add the time that it takes to do this "unexpected" extra
             # step to the overall timeout.
             device.logger.info("Start the OpenOCD server once more.")
-            await tg.start(_start_server, device.link.communication, device.logger)
+            await tg.start(_start_server, comm, device.logger)
 
         # OCD client
         device.logger.info("Connect OpenOCD client")
@@ -179,14 +190,19 @@ async def _start_server(
 async def _power_cycle_usb_ports(
     *,
     logger: Optional[Logger] = None,
-    location: Optional[str] = None,
     search: Optional[str] = None,
+    # E.g., "1-1.2". Also specify `hub_port` unless you want to power cycle all ports!
+    hub_location: Optional[str] = None,
+    # The port in the hub identified by`hub_location`
+    hub_port: Optional[int] = None,
 ) -> None:
     command = ["uhubctl", "--action", "cycle"]
-    if location is not None:
-        command += ("--location", location)
     if search is not None:
         command += ("--search", search)
+    if hub_location is not None:
+        command += ("--location", hub_location)
+    if hub_port is not None:
+        command += ("--port", str(hub_port))
     await run_process(command, check_rc=True, stdout_logger=logger)
     # Wait a moment for the USB devices to set themselves up
     await anyio.sleep(2)

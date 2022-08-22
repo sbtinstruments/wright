@@ -56,6 +56,8 @@ class DeviceDescription(FrozenModel):
         hostname: str,
         tty: Optional[Path] = None,
         jtag_usb_serial: Optional[str] = None,
+        jtag_usb_hub_location: Optional[str] = None,
+        jtag_usb_hub_port: Optional[str] = None,
         power_relay: Optional[int] = None,
         boot_mode_gpio: Optional[int] = None,
     ) -> DeviceDescription:
@@ -74,6 +76,8 @@ class DeviceDescription(FrozenModel):
             hostname=hostname,
             tty=tty,
             jtag_usb_serial=jtag_usb_serial,
+            jtag_usb_hub_location=jtag_usb_hub_location,
+            jtag_usb_hub_port=jtag_usb_hub_port,
         )
         link = DeviceLink(control=control, communication=communication)
         return cls(

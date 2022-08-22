@@ -17,8 +17,24 @@ class DeviceCommunication(FrozenModel):
     hostname: str
     # Terminal for the UART serial command line
     tty: Path = Field(default_factory=get_first_tty)
-    # We use this to identify the JTAG connection to the device
+    # We use the `jtag_usb_*` fields to identify the JTAG connection to the device.
+    # You can either specify:
+    #
+    #  1. The `jtag_usb_serial` field
+    #  2. Both the `jtag_usb_hub_location` and `jtag_usb_hub_port` fields.
+    #
+    # If you mix (1) and (2), we use (2) if we need to power cycle the USB connection.
+    # E.g., to recover the JTAG USB cable from a bad state.
+    #
+    # (1) is high-level and assumes that the USB connection is in a good state
+    # so that the device can report it's own ID. You can plug the USB device itself
+    # into any USB hub and any port in said hub.
+    # (2) is low-level and works even if the USB connection is in a bad state.
+    # You have to plug the device into a specific hub
+    # and a specific port in said hub.
     jtag_usb_serial: Optional[str] = None
+    jtag_usb_hub_location: Optional[str] = None
+    jtag_usb_hub_port: Optional[int] = None
     # Open On-Chip Debugger (OCD) port
     ocd_tcl_port: Optional[int] = None
 

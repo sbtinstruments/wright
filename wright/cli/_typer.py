@@ -53,7 +53,9 @@ def reset_device(
     branding: Branding = typer.Option(..., envvar="WRIGHT_BRANDING"),
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
     tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
-    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_SERIAL"),
+    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_USB_SERIAL"),
+    jtag_usb_hub_location: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_USB_HUB_LOCATION"),
+    jtag_usb_hub_port: Optional[int] = typer.Option(None, envvar="WRIGHT_JTAG_USB_HUB_PORT"),
     skip_reset_firmware: bool = typer.Option(
         False, envvar="WRIGHT_SKIP_RESET_FIRMWARE"
     ),
@@ -66,6 +68,8 @@ def reset_device(
         hostname=hostname,
         tty=tty,
         jtag_usb_serial=jtag_usb_serial,
+        jtag_usb_hub_location=jtag_usb_hub_location,
+        jtag_usb_hub_port=jtag_usb_hub_port,
     )
     _LOGGER.info('Using TTY "%s"', description.link.communication.tty)
     # Command settings (translate CLI args)
@@ -91,7 +95,9 @@ def run(
     device_version: str = typer.Option(..., envvar="WRIGHT_DEVICE_VERSION"),
     hostname: str = typer.Option(..., envvar="WRIGHT_HOSTNAME"),
     tty: Optional[Path] = typer.Option(None, envvar="WRIGHT_TTY"),
-    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_SERIAL"),
+    jtag_usb_serial: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_USB_SERIAL"),
+    jtag_usb_hub_location: Optional[str] = typer.Option(None, envvar="WRIGHT_JTAG_USB_HUB_LOCATION"),
+    jtag_usb_hub_port: Optional[int] = typer.Option(None, envvar="WRIGHT_JTAG_USB_HUB_PORT"),
     power_relay: Optional[int] = typer.Option(None, envvar="WRIGHT_POWER_RELAY"),
     boot_mode_gpio: Optional[int] = typer.Option(None, envvar="WRIGHT_BOOT_MODE_GPIO"),
 ) -> None:
@@ -103,6 +109,8 @@ def run(
         hostname=hostname,
         tty=tty,
         jtag_usb_serial=jtag_usb_serial,
+        jtag_usb_hub_location=jtag_usb_hub_location,
+        jtag_usb_hub_port=jtag_usb_hub_port,
         power_relay=power_relay,
         boot_mode_gpio=boot_mode_gpio,
     )

@@ -59,5 +59,5 @@ async def run_server(
             ready_regex=ready_regex,
             task_status=task_status,
         )
-    except SubprocessError as exc:
+    except (SubprocessError, ProcessLookupError) as exc:
         raise ServerError(exc) from exc

@@ -12,6 +12,8 @@ _LOW_LEVEL_CONFIG_PATH = _BASE_PATH / "low-level-config.json"
 class LowLevelConfig(FrozenModel):
     tty: Optional[Path] = None
     jtag_usb_serial: Optional[str] = None
+    jtag_usb_hub_location: Optional[str] = None
+    jtag_usb_hub_port: Optional[int] = None
     power_relay: Optional[int] = None
     boot_mode_gpio: Optional[int] = None
 

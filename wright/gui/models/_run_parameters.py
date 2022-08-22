@@ -34,6 +34,8 @@ class RunParameters(FrozenModel):
             hostname=self.hostname,
             tty=low_level_config.tty,
             jtag_usb_serial=low_level_config.jtag_usb_serial,
+            jtag_usb_hub_location=low_level_config.jtag_usb_hub_location,
+            jtag_usb_hub_port=low_level_config.jtag_usb_hub_port,
             power_relay=low_level_config.power_relay,
             boot_mode_gpio=low_level_config.boot_mode_gpio,
         )
