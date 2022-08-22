@@ -19,6 +19,15 @@ install ()
     # cryptography fails at runtime:
     #     ImportError: /home/root/projects/wright/.venv/lib/python3.9/site-packages/cryptography/hazmat/bindings/_openssl.abi3.so: undefined symbol: EVP_PBE_scrypt, version OPENSSL_1_1_0
     ln -sf /usr/lib/python3.9/site-packages/cryptography* .venv/lib/python3.9/site-packages/
+    # numpy fails at runtime:
+    #     ImportError: libcblas.so.3: cannot open shared object file: No such file or directory
+    ln -sf /usr/lib/python3.9/site-packages/numpy* .venv/lib/python3.9/site-packages/
+    # matplotlib fails at runtime:
+    #    ImportError: numpy.core.multiarray failed to import
+    ln -sf /usr/lib/python3.9/site-packages/matplotlib* .venv/lib/python3.9/site-packages/
+    # mpl_toolkits fails at runtime:
+    #    AttributeError: type object 'Axes' has no attribute '_shared_axes'
+    ln -sf /usr/lib/python3.9/site-packages/mpl_toolkits* .venv/lib/python3.9/site-packages/
 
     # Install the remaining dependencies
     poetry install -E gui
