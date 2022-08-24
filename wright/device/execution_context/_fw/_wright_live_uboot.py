@@ -42,11 +42,7 @@ class WrightLiveUboot(Uboot):
     async def _boot(self) -> None:
         with self.device.scoped_boot_mode(BootMode.JTAG):
             await self.device.hard_restart()
-            # The Zynq chip does its boot mode check within the first 100 ms.
-            # Therefore, we wait 100 ms before we switch back to the default
-            # boot mode.
-            await anyio.sleep(0.1)
-        await jtag_boot_to_uboot(self.device)
+            await jtag_boot_to_uboot(self.device)
 
     @asynccontextmanager
     async def _serial_cm(self) -> AsyncIterator[SerialCommandLine]:
@@ -203,6 +199,7 @@ async def _power_cycle_usb_ports(
         command += ("--location", hub_location)
     if hub_port is not None:
         command += ("--port", str(hub_port))
+    logger.debug(f"Run command: {command}")
     await run_process(command, check_rc=True, stdout_logger=logger)
     # Wait a moment for the USB devices to set themselves up
     await anyio.sleep(2)
