@@ -8,6 +8,10 @@ install ()
     apt -y install libffi7
     ldconfig
 
+    # Install poetry
+    curl -sSL https://install.python-poetry.org | python3 -
+    export PATH="/home/root/.local/bin:$PATH"
+
     # Create local python environment (we use `echo ""` as a noop)
     poetry run echo ""
 
