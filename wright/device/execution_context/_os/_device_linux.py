@@ -186,7 +186,7 @@ class DeviceLinux(Linux):
                 # Wait until the serial prompt is just about to appear.
                 # We found the length of this sleep empirically.
                 await anyio.sleep(80)
-                with anyio.fail_after(80):
+                with anyio.fail_after(100):
                     # The authentication is at the default values
                     await force_log_in_over_serial(serial, username="root", password="")
             # Spam `echo` commands until the serial prompt appears
