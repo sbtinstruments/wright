@@ -87,7 +87,12 @@ async def create_image(
 			100M
     """
     args = ["sh", "-c", script]
-    await run_process(("pseudo", *args), stdout_logger=logger, check_rc=True)
+    try:
+        await run_process(("pseudo", *args), stdout_logger=logger, check_rc=True)
+    except FileNotFoundError as exc:
+        # Fall back to the "fakeroot" utility
+        await run_process(("fakeroot", *args), stdout_logger=logger, check_rc=True)
+
 
 
 def create_file(path: Path, contents: Union[str, bytes]) -> None:
