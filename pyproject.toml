@@ -15,7 +15,7 @@ QtAwesome = {version = "^1.1.1", optional = true}
 matplotlib = {version = "^3.5.2", optional = true}
 "RPi.GPIO" = "^0.7.1"
 anyio = "3.x.x"
-anyio-serial = "^0.2.2"
+anyio-serial = "^0.1.5"
 # We fix the version of cryptography to the latest one available
 # through piwheels. Otherwise, we have to wait a *long* time for
 # the rust modules to compile during install.
