@@ -1078,4 +1078,4 @@ gui = ["PyQt5", "QtAwesome", "matplotlib", "qasync"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "fbc887290264d0a76794a6ebfa15d2066fdfb9753ab8315fc8a99e818827ead0"
+content-hash = "4d455972e1752f42ab842e95fd4e0df55e1e2b446f6eb9ee589e018430e1772e"
