@@ -26,25 +26,6 @@ url = "https://www.piwheels.org/simple"
 reference = "piwheels"
 
 [[package]]
-name = "anyio-serial"
-version = "0.2.2"
-description = "Quick and dirty serial bytestreams for anyio"
-optional = false
-python-versions = ">=3.6.2"
-files = [
-    {file = "anyio_serial-0.2.2-py3-none-any.whl", hash = "sha256:d2c6da0008037df0d535033ea70c42a53947717b85095a6838a217713752526f"},
-]
-
-[package.dependencies]
-anyio = ">=2"
-pyserial = "*"
-
-[package.source]
-type = "legacy"
-url = "https://www.piwheels.org/simple"
-reference = "piwheels"
-
-[[package]]
 name = "astroid"
 version = "2.15.6"
 description = "An abstract syntax tree for Python with inference support."
@@ -1078,4 +1059,4 @@ gui = ["PyQt5", "QtAwesome", "matplotlib", "qasync"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "4d455972e1752f42ab842e95fd4e0df55e1e2b446f6eb9ee589e018430e1772e"
+content-hash = "9853ea286795ab06308f850d51341443ccae08688766e4c28d8e24a45ead16ea"
