@@ -33,8 +33,8 @@ class StepsSettingsWidget(QWidget):
         self._hw_version = QLineEdit(self)
         self._basic_layout.addRow("HW version", self._hw_version)
 
-        self._hostname = QLineEdit(self)
-        self._basic_layout.addRow("Hostname", self._hostname)
+        self._pcb_id = QLineEdit(self)
+        self._basic_layout.addRow("PCB identification number", self._pcb_id)
 
         ### Advanced
         self._advanced = QGroupBox(self)
@@ -63,14 +63,17 @@ class StepsSettingsWidget(QWidget):
         return RunParameters(
             device_type=device_type,
             device_version=self._hw_version.text(),
-            hostname=self._hostname.text(),
             swu_file=swu_file,
             branding=branding,
+            pcb_identification_number=self._pcb_id.text(),
         )
 
     def setModel(self, model: RunParameters) -> None:
         self._device_type.setCurrentText(model.device_type.name)
         self._hw_version.setText(model.device_version)
-        self._hostname.setText(model.hostname)
         self._swu_file.setText(str(model.swu_file))
         self._branding.setCurrentText(model.branding.name)
+        if model.pcb_identification_number is not None:
+            self._pcb_id.setText(model.pcb_identification_number)
+        else:
+            self._pcb_id.setText("")

@@ -8,19 +8,13 @@ from cryptography.hazmat.primitives import serialization as crypto_serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from ..device import DeviceType
-from ..device.models import Branding
+from ..device.models import Branding, HardwareIdentificationGroup
 from ..subprocess import run_process
 from ..util import TEMP_DIR
 from .branding import assets
 
-# TODO: Let's just use one of these and remove the rest.
 _AUTHORIZED_KEYS = """
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC9gjH94IkVLPkBF2YKbP56XSP4hOUr28IrkPzoC1kP1 frederikaalund@Frederiks-Air.lan
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIALb4+ULe7qRSKCQuaWYfEcdsgH+6QYMtakJUzvJXP+2 frederik@frederik-VirtualBox
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO1tIn40FalyKAlSAmNLdq9kg4/RqnKsZkxyQvjlgO34 FPA@SBT-005
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBPlQL4qwXHE5qqJUed9yG+yqV5GCRULFgkp7OY5yn87 Frederik Aalund@DESKTOP-H5L6IRU
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKWCQDpcpbFZMDQ9w5QXZ92RmrPyAWd8GphWxMtlILQH SBT-Admin@DESKTOP-RQ3C127
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH+dVQEQaSaTT/mUNiN27bQvrC5yPdf0ujduI8Xt/5hB frederik@frederik-VirtualBox
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKWCQDpcpbFZMDQ9w5QXZ92RmrPyAWd8GphWxMtlILQH SBT-Admin
 """.lstrip()
 
 
@@ -31,6 +25,7 @@ async def create_config_image(
     device_version: str,
     branding: Branding,
     hostname: str,
+    hw_ids: HardwareIdentificationGroup,
     time_zone: Optional[str] = None,
     manufacturer: Optional[str] = None,
     logger: Optional[Logger] = None,
@@ -61,6 +56,7 @@ async def create_config_image(
     (etc / "localtime").symlink_to(f"/usr/share/zoneinfo/{time_zone}")
     create_ssh_key_pair(etc / "ssh")
     create_file(etc / "hwrevision", f"{device_type.value} {device_version}\n")
+    create_file(etc / "hw-ids.json", hw_ids.json())
     create_file(etc / "hw-release", _hw_release(device_type, branding, manufacturer))
     create_splash_screen(root, branding)
     await create_image(root, dest, logger=logger)
@@ -92,7 +88,6 @@ async def create_image(
     except FileNotFoundError as exc:
         # Fall back to the "fakeroot" utility
         await run_process(("fakeroot", *args), stdout_logger=logger, check_rc=True)
-
 
 
 def create_file(path: Path, contents: Union[str, bytes]) -> None:

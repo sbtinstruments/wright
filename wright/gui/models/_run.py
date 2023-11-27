@@ -20,8 +20,8 @@ class RunBase(FrozenModel):
     plan: RunPlan
     done_at: datetime = Field(default_factory=datetime.now)
 
-    def with_next_hostname(self) -> Run:
-        return self.update(plan=self.plan.with_next_hostname())
+    def with_next_pcb_id(self) -> Run:
+        return self.update(plan=self.plan.with_next_pcb_id())
 
     def with_default_steps(self) -> Run:
         return self.update(plan=self.plan.with_default_steps())
@@ -81,8 +81,8 @@ class Run(FrozenModel):
         if self.elec_ref is not None:
             self.elec_ref.save_in_dir(run_dir)
 
-    def with_next_hostname(self) -> Run:
-        return self.update(base=self.base.with_next_hostname())
+    def with_next_pcb_id(self) -> Run:
+        return self.update(base=self.base.with_next_pcb_id())
 
     def with_default_steps(self) -> Run:
         return self.update(base=self.base.with_default_steps())

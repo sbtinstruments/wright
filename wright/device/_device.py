@@ -10,6 +10,7 @@ from ._device_metadata import DeviceMetadata
 from ._device_registry import get_device
 from ._device_type import DeviceType
 from .control.boot_mode import BootMode
+from .models import HardwareIdentificationGroup
 
 _LOGGER = getLogger(__name__)
 
@@ -20,6 +21,7 @@ class Device(AsyncContextManager["Device"]):
     def __init__(
         self,
         version: str,
+        hw_ids: HardwareIdentificationGroup,
         link: DeviceLink,
         metadata: Optional[DeviceMetadata] = None,
         *,
@@ -29,6 +31,7 @@ class Device(AsyncContextManager["Device"]):
         if metadata is None:
             metadata = DeviceMetadata()
         self._version = version
+        self._hw_ids = hw_ids
         self._link = link
         # It's not the responsibility of this class to keep track of the metadata. It's
         # up to the user to manage the metadata. E.g., the current execution context
@@ -45,6 +48,11 @@ class Device(AsyncContextManager["Device"]):
     def version(self) -> str:
         """Return the version of this device."""
         return self._version
+
+    @property
+    def hw_ids(self) -> str:
+        """Return the PCB identification number of this device."""
+        return self._hw_ids
 
     @property
     def link(self) -> DeviceLink:
@@ -76,18 +84,17 @@ class Device(AsyncContextManager["Device"]):
     @abstractmethod
     def _power_on(self) -> None:
         """Turn this device on."""
-        ...
 
     @abstractmethod
     def scoped_boot_mode(self, value: BootMode) -> ContextManager[None]:
         """Switch to the given boot mode while in the context manager."""
-        ...
 
     def description(self) -> DeviceDescription:
         """Return description of this device."""
         return DeviceDescription(
             device_type=self.device_type,
             device_version=self._version,
+            hw_ids=self._hw_ids,
             link=self.link,
             metadata=self.metadata,
         )
@@ -102,6 +109,7 @@ class Device(AsyncContextManager["Device"]):
             )
         return device_cls(
             description.device_version,
+            description.hw_ids,
             description.link,
             description.metadata,
             **kwargs,

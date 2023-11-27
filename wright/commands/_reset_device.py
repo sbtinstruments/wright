@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from ..config import create_config_image
-from ..device.models import Branding
+from ..device.models import Branding, HardwareIdentificationGroup
 from ..device import Device, DeviceCondition, DeviceDescription, DeviceType, recipes
 from ..progress import Idle, ProgressManager, StatusMap, StatusStream
 from ..swupdate import MultiBundle
@@ -68,6 +68,7 @@ async def reset_device(
             device.device_type,
             device.version,
             device.link.communication.hostname,
+            device.hw_ids,
             bundle_or_swu,
             branding,
             logger,  # This logger goes into `_prepare`
@@ -129,6 +130,7 @@ async def _prepare(
     device_type: DeviceType,
     device_version: str,
     hostname: str,
+    hw_ids: HardwareIdentificationGroup,
     bundle_or_swu: Union[MultiBundle, Path],
     branding: Branding,
     logger: Logger,
@@ -150,6 +152,7 @@ async def _prepare(
         device_version=device_version,
         branding=branding,
         hostname=hostname,
+        hw_ids=hw_ids,
         logger=logger.getChild("config"),
     )
     return multi_bundle, config_image

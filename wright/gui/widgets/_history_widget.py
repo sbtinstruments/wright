@@ -30,7 +30,7 @@ class HistoryWidget(QWidget):
         self._table = QTableWidget(self)
         self._table.setColumnCount(2)
         self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._table.setHorizontalHeaderLabels(("Done at", "Hostname"))
+        self._table.setHorizontalHeaderLabels(("Done at", "Identification"))
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Fixed
@@ -72,9 +72,14 @@ class HistoryWidget(QWidget):
             _set_item_details(done_at_item, partial_run)
             self._table.setItem(row, 0, done_at_item)
             # Hostname
-            hostname_item = QTableWidgetItem(partial_run.base.plan.parameters.hostname)
-            _set_item_details(hostname_item, partial_run)
-            self._table.setItem(row, 1, hostname_item)
+            identification = (
+                partial_run.base.plan.parameters.pcb_identification_number
+                if partial_run.base.plan.parameters.pcb_identification_number
+                else partial_run.base.plan.parameters.hostname
+            )
+            hostname_or_pcb_id_item = QTableWidgetItem(identification)
+            _set_item_details(hostname_or_pcb_id_item, partial_run)
+            self._table.setItem(row, 1, hostname_or_pcb_id_item)
         # Wait 0.1 seconds before we scroll. Otherwise, it doesn't actually
         # scroll to the bottom. Maybe the scroll happens before the UI
         # refreshes?
@@ -91,7 +96,7 @@ class HistoryWidget(QWidget):
                 yield PartialRun.from_dir(directory)
             # E.g., `ValueError`, `FileNotFoundError`, etc. In any case, we just log
             # the warning and let the show go on.
-            except Exception as exc:  # pylint: disble=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
                 _LOGGER.warning(
                     f"Could not parse run directory {directory} due to: {exc}"
                 )

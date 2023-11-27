@@ -25,7 +25,7 @@ def get_run_plan(parent: QWidget, history_widget: HistoryWidget) -> Optional[Run
             last_run = last_run.with_default_steps()
             # Increment hostname if the run completed (no cancellation or errors).
             if last_run.base.status.overall is OverallStatus.COMPLETED:
-                last_run = last_run.with_next_hostname()
+                last_run = last_run.with_next_pcb_id()
             plan = last_run.base.plan
         # `ValueError`: If we can't construct `Run`
         except ValueError as exc:
@@ -35,6 +35,7 @@ def get_run_plan(parent: QWidget, history_widget: HistoryWidget) -> Optional[Run
     if plan is None:
         parameters = RunParameters(
             device_type=DeviceType.BACTOBOX,
+            pcb_identification_number="XXXXXYYWW000",
             device_version="",
             hostname="bbYYWW000",
             swu_file=_get_default_swu_file(),

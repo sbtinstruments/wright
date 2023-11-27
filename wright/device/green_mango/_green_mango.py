@@ -14,6 +14,7 @@ from .._device_metadata import DeviceMetadata
 from .._device_registry import add_device
 from .._device_type import DeviceType
 from ..control.boot_mode import BootMode
+from ..models import HardwareIdentificationGroup
 
 _LOGGER = getLogger(__name__)
 
@@ -24,12 +25,13 @@ class GreenMango(Device):
     def __init__(
         self,
         version: str,
+        hw_ids: HardwareIdentificationGroup,
         link: DeviceLink,
         metadata: Optional[DeviceMetadata] = None,
         *,
         logger: Optional[Logger] = None,
     ) -> None:
-        super().__init__(version, link, metadata, logger=logger)
+        super().__init__(version, hw_ids, link, metadata, logger=logger)
         self._stack: Optional[AsyncExitStack] = None
         self._power_control = link.control.power
         self._boot_mode_control = link.control.boot_mode
