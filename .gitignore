@@ -16,7 +16,8 @@ test.py
 experiments/*
 
 # IDE settings
-/.vscode
+.vscode/settings.json
+.vscode/*.log
 
 # Auto-generated files from, e.g., the build system
 /setup.py
