@@ -7,9 +7,6 @@ import anyio
 import asyncssh
 from pydantic import TypeAdapter
 
-from wright.command_line._ssh_command_line import SshCommandLine
-from wright.device import Device
-from wright.device.execution_context import DeviceLinux, enter_context
 from wright.device.models._device_data_models import BbpState, PartialBbpStatus
 
 _LOGGER = logging.getLogger()
@@ -25,7 +22,8 @@ async def main() -> None:
         port,
         username=username,
     ) as connection:
-        await run_measure(connection)
+        while True:
+            await run_measure(connection)
 
 
 def main_sync() -> None:
@@ -42,9 +40,6 @@ async def run_measure(connection: asyncssh.SSHClientConnection) -> None:
     await _start_bbp(connection, program_name="measure")
     with anyio.fail_after(60 * 4):
         await _wait_for_bbp(connection)
-    # elec_ref_data = await read_file_as_json(
-    #     connection, Path("/media/config/individual/etc/electrical_test_reference.json")
-    # )
 
 
 async def _start_bbp(
