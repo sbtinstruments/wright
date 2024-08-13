@@ -13,7 +13,8 @@ _LOGGER = logging.getLogger()
 
 
 async def main() -> None:
-    host = "bb2305092"
+    # host = "bb2305092"
+    host = "sbt-usb-device"
     port = 7910
     username = "root"
 
