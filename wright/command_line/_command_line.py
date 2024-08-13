@@ -4,7 +4,7 @@ import logging
 from abc import abstractmethod
 from typing import Any, AsyncContextManager, Type, TypeVar
 
-from pydantic import parse_raw_as
+from pydantic import TypeAdapter
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,4 +23,4 @@ class CommandLine(AsyncContextManager["CommandLine"]):
     ) -> ParseType:
         """Run command and wait for the parsed response."""
         response = await self.run(command, **kwargs)
-        return parse_raw_as(parse_as, response)
+        return TypeAdapter(parse_as).validate_json(response)

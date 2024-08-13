@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from pydantic import constr, root_validator, Field
+from pydantic import Field, model_validator
 
 from ..model import FrozenModel
 from ._device_link import DeviceCommunication, DeviceLink
@@ -14,10 +14,9 @@ from .control.boot_mode import GpioBootModeControl
 from .control.power import RelayPowerControl
 from .models import HardwareIdentificationGroup
 
-
 # These item numbers come directly from SBT's ERP system
 #  (Microsoft Dynamics 365 Business Central)
-_DEVICE_PCB_ITEM_NUMBER: dict[DeviceType, tuple(int)] = {
+_DEVICE_PCB_ITEM_NUMBER: dict[DeviceType, tuple[int, ...]] = {
     DeviceType.BACTOBOX: (10196,),
     DeviceType.ZEUS: (20045,),
 }
@@ -28,6 +27,8 @@ _DEVICE_DEFAULT_HOSTNAME: dict[DeviceType, str] = {
     DeviceType.ZEUS: "zsYYWWXXX",
 }
 
+DeviceVersion = Annotated[str, Field(pattern=r"[0-9][A-Za-z0-9-_.]+")]
+
 
 class DeviceDescription(FrozenModel):
     """Identifies a specific device by its type and link to the host."""
@@ -35,7 +36,7 @@ class DeviceDescription(FrozenModel):
     # Kind/class of the device
     device_type: DeviceType
     # Version of the device
-    device_version: constr(regex=r"[0-9][A-Za-z0-9-_.]+")
+    device_version: DeviceVersion
     # Connection to the device by which we can, e.g., turn it on and send data.
     link: DeviceLink
     # Metadata such as the device condition, firmware version, etc.
@@ -45,19 +46,17 @@ class DeviceDescription(FrozenModel):
         default=None, description="We add this in 11/2023 as a request from production"
     )
 
-    @root_validator
-    def _check_pcb_item_number(  # pylint: disable=no-self-argument
-        cls, values: dict[str, Any]
-    ) -> dict[str, Any]:
-        hw_ids: HardwareIdentificationGroup = values.get("hw_ids")
-        if hw_ids is None:
-            return values
-        device_type = values.get("device_type")
-        assert hw_ids.pcb_item_number in _DEVICE_PCB_ITEM_NUMBER[device_type], (
+    @model_validator(mode="after")
+    def _check_pcb_item_number(self) -> DeviceDescription:
+        if self.hw_ids is None:
+            return self
+        assert (
+            self.hw_ids.pcb_item_number in _DEVICE_PCB_ITEM_NUMBER[self.device_type]
+        ), (
             f"{DeviceType.BACTOBOX} PCB identification number must "
-            f"start with {_DEVICE_PCB_ITEM_NUMBER[device_type]}"
+            f"start with {_DEVICE_PCB_ITEM_NUMBER[self.device_type]}"
         )
-        return values
+        return self
 
     @classmethod
     def from_raw_args(

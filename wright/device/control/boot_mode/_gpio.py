@@ -1,8 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, ClassVar
 
-import RPi.GPIO as GPIO
+try:
+    import RPi.GPIO as GPIO
+except RuntimeError as exc:
+    if str(exc) != "This module can only be run on a Raspberry Pi!":
+        raise
+
+    class GPIO:
+        """Dummy GPIO controls"""
+
+        BOARD: ClassVar[Any] = None
+        HIGH: ClassVar[Any] = None
+        LOW: ClassVar[Any] = None
+        OUT: ClassVar[Any] = None
+
+        def setmode(self, *args: Any) -> None:
+            pass
+
+        def input(self, *args: Any) -> None:
+            raise RuntimeError("Can only use GPIO boot mode on a Raspberry Pi")
+
+        def output(self, *args: Any) -> None:
+            raise RuntimeError("Can only use GPIO boot mode on a Raspberry Pi")
+
 
 from ._abc import AbstractBootModeControl
 from ._boot_mode import BootMode

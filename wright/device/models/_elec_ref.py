@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+from functools import cached_property
 from pathlib import Path
 from shutil import copyfile
 from typing import Any, Optional
 from uuid import uuid4
-from functools import cached_property
 
 import anyio
 
+from ...model import FrozenModel
 from .._device_type import DeviceType
 from ._frequency_sweep import FrequencySweep
-from ._signal_integrity import ElecRuleSet, ELEC_RULE_SETS, ElecFeatures
-from ...model import FrozenModel
+from ._signal_integrity import ELEC_RULE_SETS, ElecFeatures, ElecRuleSet
 
 _SOURCE_DATA_FILE_NAME = "electronics_reference.json"
 _ELEC_RULE_SET_FILE_NAME = "electronics_rule_set.json"
@@ -32,7 +32,9 @@ class ElecRef(FrozenModel):
         return self.features.is_accepted(self.rule_set)
 
     @classmethod
-    def from_frequency_sweep(cls, source_data: FrequencySweep, *, device_type: DeviceType):
+    def from_frequency_sweep(
+        cls, source_data: FrequencySweep, *, device_type: DeviceType
+    ):
         # TODO: Import it from external JSON file
         rule_set = ELEC_RULE_SETS[device_type]
         return cls(source_data=source_data, rule_set=rule_set)
@@ -47,11 +49,7 @@ class ElecRef(FrozenModel):
         image_file = directory / _IMAGE_FILE_NAME
         if not image_file.is_file():
             image_file = None
-        return cls(
-            source_data=source_data,
-            rule_set=rule_set,
-            image_file=image_file
-        )
+        return cls(source_data=source_data, rule_set=rule_set, image_file=image_file)
 
     def save_in_dir(self, directory: Path) -> None:
         source_data_file = directory / _SOURCE_DATA_FILE_NAME
@@ -67,6 +65,7 @@ class ElecRef(FrozenModel):
 
     def _generate_image(self) -> ElecRef:
         from ...plots import ElecRefPlot
+
         image_file_name = f"electronics-reference-{uuid4()}.png"
         image_file = Path("/tmp") / image_file_name
         plot = ElecRefPlot(self)
@@ -83,4 +82,4 @@ class ElecRef(FrozenModel):
 
     class Config:
         # While we wait for: https://github.com/samuelcolvin/pydantic/pull/2625
-        keep_untouched = (cached_property,)
+        ignored_types = (cached_property,)

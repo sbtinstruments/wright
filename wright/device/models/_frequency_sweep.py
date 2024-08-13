@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import root_validator
+from pydantic import model_validator
 
 from ...model import FrozenModel
 
@@ -18,19 +18,17 @@ class FrequencySweep(FrozenModel):
         yield self.site0
         yield self.site1
 
-    @root_validator
-    def _dimensions_match(  # pylint: disable=no-self-argument
-        cls, values: dict[str, Any]
-    ) -> dict[str, Any]:
-        dimension_names = ("frequencies", "site0", "site1")
-        lengths = iter(len(v) for k, v in values.items() if k in dimension_names)
+    @model_validator(mode="after")
+    def _dimensions_match(self) -> FrequencySweep:
+        dimensions = (self.frequencies, self.site0, self.site1)
+        lengths = iter(len(dimension) for dimension in dimensions)
         try:
             first_length = next(lengths)
         except StopIteration:
-            return values
+            return self
         if not all(length == first_length for length in lengths):
             raise ValueError("Frequencies and site values must have the same length")
-        return values
+        return self
 
     @classmethod
     def from_elec_ref_data(cls, elec_ref_data: dict[str, Any]) -> FrequencySweep:

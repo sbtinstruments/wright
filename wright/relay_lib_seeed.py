@@ -30,7 +30,14 @@ DEVICE_ADDRESS = 0x20  # 7 bit address (will be left shifted to add the read wri
 DEVICE_REG_MODE1 = 0x06
 DEVICE_REG_DATA = 0xFF
 
-bus = smbus2.SMBus(1)  # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
+_BUS: smbus2.SMBus | None = None
+
+
+def _get_bus() -> smbus2.SMBus:
+    global _BUS
+    if _BUS is None:
+        _BUS = smbus2.SMBus(1)  # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1)
+    return _BUS
 
 
 def relay_on(relay_num: int) -> None:
@@ -47,7 +54,7 @@ def relay_on(relay_num: int) -> None:
     _raise_if_invalid_relay_num(relay_num)
     _LOGGER.debug("Turning relay %d ON", relay_num)
     DEVICE_REG_DATA &= ~(0x1 << (relay_num - 1))
-    bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
+    _get_bus().write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
 def relay_off(relay_num: int) -> None:
@@ -64,7 +71,7 @@ def relay_off(relay_num: int) -> None:
     _raise_if_invalid_relay_num(relay_num)
     _LOGGER.debug("Turning relay %d OFF", relay_num)
     DEVICE_REG_DATA |= 0x1 << (relay_num - 1)
-    bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
+    _get_bus().write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
 def relay_all_on() -> None:
@@ -77,7 +84,7 @@ def relay_all_on() -> None:
     global DEVICE_REG_MODE1
     _LOGGER.debug("Turning all relays ON")
     DEVICE_REG_DATA &= ~(0xF << 0)
-    bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
+    _get_bus().write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
 def relay_all_off() -> None:
@@ -90,7 +97,7 @@ def relay_all_off() -> None:
     global DEVICE_REG_MODE1
     _LOGGER.debug("Turning all relays OFF")
     DEVICE_REG_DATA |= 0xF << 0
-    bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
+    _get_bus().write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, DEVICE_REG_DATA)
 
 
 def relay_get_port_status(relay_num: int) -> bool:
@@ -123,7 +130,7 @@ def _relay_get_port_data(relay_num: int) -> int:
     global DEVICE_REG_DATA
     _raise_if_invalid_relay_num(relay_num)
     # read the memory location
-    DEVICE_REG_DATA = bus.read_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1)
+    DEVICE_REG_DATA = _get_bus().read_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1)
     # return the specified bit status
     return DEVICE_REG_DATA
 
