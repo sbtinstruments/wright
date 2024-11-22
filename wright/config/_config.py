@@ -25,7 +25,7 @@ async def create_config_image(
     device_version: str,
     branding: Branding,
     hostname: str,
-    hw_ids: HardwareIdentificationGroup,
+    hw_ids: Optional[HardwareIdentificationGroup] = None,
     time_zone: Optional[str] = None,
     manufacturer: Optional[str] = None,
     logger: Optional[Logger] = None,
@@ -56,7 +56,8 @@ async def create_config_image(
     (etc / "localtime").symlink_to(f"/usr/share/zoneinfo/{time_zone}")
     create_ssh_key_pair(etc / "ssh")
     create_file(etc / "hwrevision", f"{device_type.value} {device_version}\n")
-    create_file(etc / "hw-ids.json", hw_ids.json())
+    if hw_ids is not None:
+        create_file(etc / "hw-ids.json", hw_ids.json())
     create_file(etc / "hw-release", _hw_release(device_type, branding, manufacturer))
     create_splash_screen(root, branding)
     await create_image(root, dest, logger=logger)

@@ -21,7 +21,7 @@ class Device(AsyncContextManager["Device"]):
     def __init__(
         self,
         version: str,
-        hw_ids: HardwareIdentificationGroup,
+        hw_ids: Optional[HardwareIdentificationGroup],
         link: DeviceLink,
         metadata: Optional[DeviceMetadata] = None,
         *,
@@ -50,7 +50,7 @@ class Device(AsyncContextManager["Device"]):
         return self._version
 
     @property
-    def hw_ids(self) -> str:
+    def hw_ids(self) -> Optional[HardwareIdentificationGroup]:
         """Return the PCB identification number of this device."""
         return self._hw_ids
 

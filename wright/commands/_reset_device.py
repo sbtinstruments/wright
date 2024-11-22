@@ -130,7 +130,7 @@ async def _prepare(
     device_type: DeviceType,
     device_version: str,
     hostname: str,
-    hw_ids: HardwareIdentificationGroup,
+    hw_ids: Optional[HardwareIdentificationGroup],
     bundle_or_swu: Union[MultiBundle, Path],
     branding: Branding,
     logger: Logger,

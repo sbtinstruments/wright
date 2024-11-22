@@ -25,7 +25,7 @@ class GreenMango(Device):
     def __init__(
         self,
         version: str,
-        hw_ids: HardwareIdentificationGroup,
+        hw_ids: Optional[HardwareIdentificationGroup],
         link: DeviceLink,
         metadata: Optional[DeviceMetadata] = None,
         *,
